@@ -1,0 +1,5 @@
+{{ if gt (len .Allowlist.CIDR) 0 }}
+{{ range $ip := .Allowlist.CIDR }}
+allow {{ $ip }};{{ end }}
+deny all;
+{{ end }}

@@ -1,0 +1,47 @@
+apiVersion: ingress.nginx.kubebuilder.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    ingress.nginx.kubebuilder.io/proxy-path: "/ccc/bbb(/|$)/(.*)"
+    ingress.nginx.kubebuilder.io/proxy-target: "/$1"
+    ingress.nginx.kubebuilder.io/proxy-host: "https://ccc.com"
+    ingress.nginx.kubebuilder.io/proxy-enable-regex: "true"
+#    ingress.nginx.kubebuilder.io/rewrite: "/$1"
+#    ingress.nginx.kubebuilder.io/enable-regex: "true"
+#    ingress.nginx.kubebuilder.io/allowList: "192.168.3.10,192.168.3.12"
+  labels:
+    app.kubernetes.io/name: ingress-nginx-kubebuilder
+    app.kubernetes.io/managed-by: kustomize
+  name: ingress-nginx
+  namespace: ingress-nginx-kubebuilder-system
+spec:
+  # TODO(user): Add fields here
+  rules:
+    - host: "*.a.com"
+      http:
+        paths:
+          - path: "/"
+            pathType: prefix
+            backend:
+              service:
+                name: nginx-service-a
+                port:
+                  number: 9092
+    - host: "b.com"
+      http:
+        paths:
+          - path: "/bb/(/|$)/(.*)"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nginx-service-b
+                port:
+                  number: 9093
+          - path: "/cc/(/|$)/(.*)"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nginx-service-c
+                port:
+                  number: 9094
+

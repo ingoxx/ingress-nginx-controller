@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: ingress-nginx-kubebuilder
+    app.kubernetes.io/managed-by: kustomize
+  name: webhook-service
+  namespace: system
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 9443
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: ingress-nginx-kubebuilder
+    app.kubernetes.io/managed-by: kustomize
+  name: ingress-nginx-controller
+  namespace: system
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 443
+      protocol: TCP
+      name: https
+    - port: 80
+      protocol: TCP
+      name: http
+  selector:
+    control-plane: controller-manager

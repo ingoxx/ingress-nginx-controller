@@ -1,0 +1,80 @@
+## start {{ .Server.HostName }}
+server {
+	listen 80;
+	listen [::]:80;
+	listen 443;
+	listen [::]:443;
+	server_name {{ .Server.HostName }};
+
+	# {{ if ne .RedirectHost "" }}
+    # Server is hosted at {{ .RedirectHost }}.
+    # {{ end }}
+
+    #{{ if .RenderSsl }}
+    #    ssl_certificate {{ .Cert }};
+    #    ssl_certificate_key {{ .Key }};
+    #    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    #    ssl_ciphers EECDH+CHACHA20:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    #    ssl_prefer_server_ciphers on;
+    #    ssl_session_timeout 10m;
+    #    ssl_session_cache builtin:1000 shared:SSL:10m;
+    #    ssl_buffer_size 1400;
+    #    add_header Strict-Transport-Security max-age=15768000;
+    #    ssl_stapling on;
+    #    ssl_stapling_verify on;
+    #{{ end }}
+
+    # {{ if gt (len .Annotations.Allowlist.CIDR) 0 }}
+    # {{ range $ip := .Annotations.Allowlist.CIDR }}
+    # allow {{ $ip }};{{ end }}
+    # deny all;
+    # {{ end }}
+
+    {{ if gt (len .Annotations.DenyList.CIDR) 0 }}
+    {{ range $ip := .Annotations.DenyList.CIDR }}
+    allow {{ $ip }};{{ end }}
+    deny all;
+    {{ end }}
+
+    # allow cos
+    add_header 'Access-Control-Allow-Origin' '*';
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,xfilecategory,xfilename,xfilesize';
+    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+    if ($request_method = 'OPTIONS') {
+        return 204;
+    }
+
+    # webSocket enable
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    # proxy
+     location {{ .Annotations.Proxy.ProxyPath }} {
+        {{ if .Annotations.Proxy.ProxyEnableRegex }}
+        rewrite {{ .Annotations.Proxy.ProxyPath }} {{ .Annotations.Proxy.ProxyPath }} break;
+        {{ end }}
+        {{ if .Annotations.Proxy.ProxySSL }}
+        proxy_pass https://{{ ..Annotations.Proxy.ProxyHost }};
+        {{ else }}
+        proxy_pass http://{{ ..Annotations.Proxy.ProxyHost }};
+        {{end}}
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # backend
+    {{ if gt (len .Server.Paths) 0 }}
+    {{ range $backend := .Server.Paths }}
+     location {{ .Server.Paths.Path }} {
+        {{ if .Annotations.Rewrite.EnableRegex }}
+        rewrite {{ ..Server.Paths.Path }} {{ .Annotations.Rewrite.Target }} break;
+        {{ end }}
+        proxy_pass http://{{ .Server.HostName }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    };{{ end }}
+    {{ end }}
+}
+## end {{ .Server.HostName }}
