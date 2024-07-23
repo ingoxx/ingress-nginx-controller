@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/nginx"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -122,8 +121,6 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
-	go nginx.Start()
 
 	if err = (&controller.IngressReconciler{
 		Client: mgr.GetClient(),

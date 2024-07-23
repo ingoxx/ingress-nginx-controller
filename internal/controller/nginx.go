@@ -9,7 +9,6 @@ import (
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/ipallowlist"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/proxy"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
-	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/nginx"
 	"k8s.io/klog/v2"
 	"log"
 	"os"
@@ -112,10 +111,6 @@ func (n *NginxConfigure) generateDenyList() (*template.Template, error) {
 
 func (n *NginxConfigure) generateProxy(config *configure) (bytes.Buffer, error) {
 	var proxyBytes bytes.Buffer
-	file, err := os.ReadFile(proxyTmpl)
-	if err != nil {
-		return proxyBytes, err
-	}
 
 	return proxyBytes, nil
 }
@@ -152,24 +147,6 @@ func (n *NginxConfigure) generateRedirect(config *configure) (bytes.Buffer, erro
 
 func (n *NginxConfigure) readyRenderData(config *configure) renderNginxConfigure {
 	var data renderNginxConfigure
-	if len(config.Annotations.AllowList.CIDR) > 0 {
-		data.AllowList = config.Annotations.AllowList.CIDR
-	}
-
-	if len(config.Annotations.DenyList.CIDR) > 0 {
-		data.DenyList = config.Annotations.DenyList.CIDR
-	}
-
-	if len(config.Annotations.Redirect) > 0 {
-		data.Redirect = config.Annotations.Redirect
-	}
-
-	if len(config.Annotations.Proxy) > 0 {
-		data.Proxy = config.Annotations.Proxy
-	}
-
-	data.HostName = config.Server.HostName
-
 	return data
 }
 
@@ -184,44 +161,7 @@ func (n *NginxConfigure) generateServer(config *configure) error {
 		log.Fatal("Error parsing nginx.conf.tmpl:", err)
 	}
 
-	var serverByte bytes.Buffer
-	var backendBytes bytes.Buffer
-
-	data := n.readyRenderData(config)
-
-	proxyBackendBytes, err := n.generateProxy(config)
-	if err != nil {
-		return err
-	}
-
-	_, err = serverTemp.New("proxy").Parse(proxyBackendBytes.String())
-	if err != nil {
-		return err
-	}
-
-	redirectBackendBytes, err := n.generateRedirect(config)
-	if err != nil {
-		return err
-	}
-
-	if config.Server != nil {
-		_, err = serverTemp.New("redirect").Parse(redirectBackendBytes.String())
-		if err != nil {
-			return err
-		}
-
-		backendBytes, err = n.generateBackend(config.Server.Paths)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = serverTemp.New("backend").Parse(backendBytes.String())
-	if err != nil {
-		return err
-	}
-
-	if err := serverTemp.Execute(&serverByte, data); err != nil {
+	if err := serverTemp.Execute(&config.ServerTpl, config.Annotations); err != nil {
 		return err
 	}
 
@@ -265,7 +205,7 @@ func (n *NginxConfigure) generateNginxConfigure(cfg *ingressv1.Configuration, an
 
 	// 执行渲染
 	var tpl bytes.Buffer
-	err = mainTmpl.Execute(&tpl, nil)
+	err = mainTmpl.Execute(os.Stdout, nil)
 	if err != nil {
 		return err
 	}
@@ -287,47 +227,59 @@ func (n *NginxConfigure) generateTestConf(b []byte) error {
 }
 
 func (n *NginxConfigure) GenerateNginxConfigure(ingress annotations.IngressAnnotations) error {
-	var cfg *ingressv1.Configuration
-	if len(ingress.Ingress.Spec.Rules) > 0 {
-		cfg = n.getBackendConfigure(ingress)
-	} else {
-		cfg = n.getDefaultBackendConfigure(ingress)
+	cfg := n.getBackendConfigure(ingress)
+	defaultServer, err := n.getDefaultBackendConfigure(ingress)
+	if err == nil && defaultServer != nil {
+		cfg.Servers = append(cfg.Servers, defaultServer)
 	}
 
 	if cfg == nil {
-		return fmt.Errorf("fail to get server list in ingress: %s", ingress.Ingress.Name)
+		return fmt.Errorf("fail to get backend config in ingress: %s, namespace: %s", ingress.Ingress.Name, ingress.Ingress.Namespace)
 	}
 
 	if err := n.generateNginxConfigure(cfg, ingress.ParsedAnnotations); err != nil {
 		return err
 	}
 
-	if err := nginx.Reload(nginxConf, testConf); err != nil {
-		return err
-	}
+	//if err := nginx.Reload(nginxConf, testConf); err != nil {
+	//	return err
+	//}
 
 	return nil
 }
 
-func (n *NginxConfigure) getDefaultBackendConfigure(ingress annotations.IngressAnnotations) *ingressv1.Configuration {
-	var servers = make([]*ingressv1.Server, 1)
-	var backend = make([]*ingressv1.Backend, 1)
+func (n *NginxConfigure) getDefaultBackendConfigure(ingress annotations.IngressAnnotations) (*ingressv1.Server, error) {
+	var servers *ingressv1.Server
+	var backends []*ingressv1.Backend
+
+	svc, err := n.rr.GetService(ingress.Ingress.Spec.DefaultBackend.Service.Name)
+	if err != nil {
+		return servers, err
+	}
+
+	backendPort := n.rr.GetSvcPort(*ingress.Ingress.Spec.DefaultBackend)
+	if backendPort == 0 {
+		klog.ErrorS(fmt.Errorf("%s svc port not exists", svc.Name), fmt.Sprintf("namespace: %s", ingress.Ingress.Namespace))
+		return servers, fmt.Errorf("%s svc port not exists", svc.Name)
+	}
+
 	b := &ingressv1.Backend{
+		Name:           svc.Name,
+		NameSpace:      svc.Namespace,
+		Port:           backendPort,
 		Path:           "/",
 		ServiceBackend: ingress.Ingress.Spec.DefaultBackend.Service,
 	}
-
-	backend = append(backend, b)
+	backends = append(backends, b)
 
 	s := &ingressv1.Server{
 		Name:      ingress.Ingress.Name,
 		NameSpace: ingress.Ingress.Namespace,
 		HostName:  "_",
-		Paths:     backend,
+		Paths:     backends,
 	}
-	servers = append(servers, s)
 
-	return &ingressv1.Configuration{Servers: servers}
+	return s, nil
 }
 
 func (n *NginxConfigure) getBackendConfigure(ingress annotations.IngressAnnotations) *ingressv1.Configuration {
@@ -337,10 +289,31 @@ func (n *NginxConfigure) getBackendConfigure(ingress annotations.IngressAnnotati
 	for _, v := range rule {
 		var backend = make([]*ingressv1.Backend, len(v.HTTP.Paths))
 		for _, p := range v.HTTP.Paths {
+			if ingress.ParsedAnnotations.Rewrite.RewriteEnableRegex {
+				if *p.PathType != "ImplementationSpecific" {
+					klog.ErrorS(fmt.Errorf("when annotations rewrite-enable-regex is true, the value of pathType must be: ImplementationSpecific"), fmt.Sprintf("namespace: %s", ingress.Ingress.Namespace))
+					return nil
+				}
+			}
+
+			svc, err := n.rr.GetService(p.Backend.Service.Name)
+			if err != nil {
+				return nil
+			}
+
+			backendPort := n.rr.GetSvcPort(p.Backend)
+			if backendPort == 0 {
+				klog.ErrorS(fmt.Errorf("%s svc port not exists", p.Backend.Service.Name), fmt.Sprintf("not found, svc name: %s, namespace: %s", p.Backend.Service.Name, ingress.Ingress.Namespace))
+				return nil
+			}
+
 			b := &ingressv1.Backend{
-				Name:           v.Host,
+				Name:           svc.Name,
+				NameSpace:      svc.Namespace,
 				Path:           p.Path,
+				Port:           backendPort,
 				ServiceBackend: p.Backend.Service,
+				UseRegex:       ingress.ParsedAnnotations.Rewrite.RewriteEnableRegex,
 			}
 			backend = append(backend, b)
 		}
@@ -354,5 +327,6 @@ func (n *NginxConfigure) getBackendConfigure(ingress annotations.IngressAnnotati
 
 		servers = append(servers, s)
 	}
+
 	return &ingressv1.Configuration{Servers: servers}
 }

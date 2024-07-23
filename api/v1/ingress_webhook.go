@@ -17,6 +17,8 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
+	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,7 +59,7 @@ func (r *Ingress) ValidateCreate() (admission.Warnings, error) {
 	ingresslog.Info("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
-	return nil, nil
+	return nil, r.ValidPath()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -65,7 +67,7 @@ func (r *Ingress) ValidateUpdate(old runtime.Object) (admission.Warnings, error)
 	ingresslog.Info("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
-	return nil, nil
+	return nil, r.ValidPath()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -74,4 +76,24 @@ func (r *Ingress) ValidateDelete() (admission.Warnings, error) {
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil, nil
+}
+
+func (r *Ingress) ValidPath() error {
+	for _, v := range r.Spec.Rules {
+		var path string
+		proxyPath, ok := r.Annotations["ingress.nginx.kubebuilder.io/proxy-path"]
+		if ok {
+			pp := v1.HTTPIngressPath{
+				Path: proxyPath,
+			}
+			v.IngressRuleValue.HTTP.Paths = append(v.IngressRuleValue.HTTP.Paths, pp)
+		}
+		for _, p := range v.IngressRuleValue.HTTP.Paths {
+			if p.Path == path {
+				return fmt.Errorf("the paths in the same host cannot be the same, ingress: %s, namespace: %s", r.Name, r.Namespace)
+			}
+			path = p.Path
+		}
+	}
+	return nil
 }

@@ -70,12 +70,11 @@ type Configuration struct {
 }
 
 type Server struct {
-	Name        string           `json:"name"`
-	NameSpace   string           `json:"name_space"`
-	HostName    string           `json:"host_name"`
-	Tls         netv1.IngressTLS `json:"tls"`
-	Paths       []*Backend       `json:"paths"`
-	EnableRegex bool             `json:"enable_regex"`
+	Name      string           `json:"name"`
+	NameSpace string           `json:"name_space"`
+	HostName  string           `json:"host_name"`
+	Tls       netv1.IngressTLS `json:"tls"`
+	Paths     []*Backend       `json:"paths"`
 }
 
 type Backend struct {
@@ -83,6 +82,8 @@ type Backend struct {
 	NameSpace      string                       `json:"name_space"`
 	Path           string                       `json:"path"`
 	ServiceBackend *netv1.IngressServiceBackend `json:"service_backend"`
+	Port           int32                        `json:"port"`
+	UseRegex       bool                         `json:"use_regex"`
 }
 
 type ServiceBackendPort struct {

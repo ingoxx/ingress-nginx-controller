@@ -24,16 +24,16 @@ server {
     #    ssl_stapling_verify on;
     #{{ end }}
 
-    # {{ if gt (len .Annotations.Allowlist.CIDR) 0 }}
-    # {{ range $ip := .Annotations.Allowlist.CIDR }}
-    # allow {{ $ip }};{{ end }}
-    # deny all;
-    # {{ end }}
+    {{ if gt (len .Annotations.Allowlist.CIDR) 0 }}
+    {{ range $ip := .Annotations.Allowlist.CIDR }}
+    allow {{ $ip }};{{ end }}
+    deny all;
+    {{ end }}
 
     {{ if gt (len .Annotations.DenyList.CIDR) 0 }}
     {{ range $ip := .Annotations.DenyList.CIDR }}
-    allow {{ $ip }};{{ end }}
-    deny all;
+    deny {{ $ip }};{{ end }}
+    allow all;
     {{ end }}
 
     # allow cos
@@ -52,13 +52,13 @@ server {
 
     # proxy
      location {{ .Annotations.Proxy.ProxyPath }} {
-        {{ if .Annotations.Proxy.ProxyEnableRegex }}
-        rewrite {{ .Annotations.Proxy.ProxyPath }} {{ .Annotations.Proxy.ProxyPath }} break;
+        {{ if .Annotations.Proxy.ProxyEnableRewrite }}
+        rewrite {{ .Annotations.Proxy.ProxyPath }} /{{ .Annotations.Proxy.ProxyTarget }} break;
         {{ end }}
         {{ if .Annotations.Proxy.ProxySSL }}
-        proxy_pass https://{{ ..Annotations.Proxy.ProxyHost }};
+        proxy_pass https://{{ .Annotations.Proxy.ProxyHost }};
         {{ else }}
-        proxy_pass http://{{ ..Annotations.Proxy.ProxyHost }};
+        proxy_pass http://{{ .Annotations.Proxy.ProxyHost }};
         {{end}}
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -67,11 +67,11 @@ server {
     # backend
     {{ if gt (len .Server.Paths) 0 }}
     {{ range $backend := .Server.Paths }}
-     location {{ .Server.Paths.Path }} {
-        {{ if .Annotations.Rewrite.EnableRegex }}
-        rewrite {{ ..Server.Paths.Path }} {{ .Annotations.Rewrite.Target }} break;
+     location {{ .backend.Path }} {
+        {{ if .backend.EnableRegex }}
+        rewrite {{ .backend.Path }} {{ .Annotations.Rewrite.Target }} break;
         {{ end }}
-        proxy_pass http://{{ .Server.HostName }};
+        proxy_pass http://{{ .backend.Name }}.{{ .backend.namespace }}.svc:{{ .backend.Port }};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     };{{ end }}

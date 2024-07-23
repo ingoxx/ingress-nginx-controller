@@ -18,11 +18,15 @@ var (
 	AnnotationsPrefix = DefaultAnnotationsPrefix
 )
 
-type AnnotationFields map[string]string
+type AnnotationFields map[string]AnnotationConfig
 
 type Annotation struct {
 	Group       string
 	Annotations AnnotationFields
+}
+
+type AnnotationConfig struct {
+	Doc string
 }
 
 type IngressAnnotation interface {
@@ -62,6 +66,20 @@ func (a ingAnnotations) parseString(name string) (string, error) {
 	}
 
 	return "", kerr.ErrMissingAnnotations
+}
+
+func (a ingAnnotations) parseStringSlice(name string) ([]string, error) {
+	var data = make([]string, 0)
+	val, ok := a[name]
+	if ok {
+		if val == "" {
+			return data, kerr.NewInvalidAnnotationContent(name, val)
+		}
+
+		return data, nil
+	}
+
+	return data, kerr.ErrMissingAnnotations
 }
 
 func (a ingAnnotations) parseBool(name string) (bool, error) {

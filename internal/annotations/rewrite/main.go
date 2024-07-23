@@ -4,12 +4,15 @@ import (
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"strings"
 )
 
 const (
 	rewriteTargetAnnotation      = "rewrite-target"
 	rewriteSSLAnnotation         = "rewrite-ssl"
 	rewriteEnableRegexAnnotation = "rewrite-enable-regex"
+	rewriteAllowListAnnotation   = "rewrite-ip-allow-list"
+	rewriteDenyListAnnotation    = "rewrite-ip-deny-list"
 )
 
 type Proxy struct {
@@ -17,17 +20,31 @@ type Proxy struct {
 }
 
 type Config struct {
-	Target      string `json:"target"`
-	EnableSSL   bool   `json:"enable_ssl"`
-	EnableRegex bool   `json:"enable_regex"`
+	RewriteTarget      string   `json:"rewrite-target"`
+	RewriteSSL         bool     `json:"rewrite-ssl"`
+	RewriteEnableRegex bool     `json:"rewrite-enable-regex"`
+	RewriteIpAllowList []string `json:"rewrite-ip-allow-list"`
+	RewriteIpDenyList  []string `json:"rewrite-ip-deny-list"`
 }
 
 var proxyAnnotation = parser.Annotation{
 	Group: "rewrite",
 	Annotations: parser.AnnotationFields{
-		rewriteTargetAnnotation:      rewriteTargetAnnotation,
-		rewriteSSLAnnotation:         rewriteSSLAnnotation,
-		rewriteEnableRegexAnnotation: rewriteEnableRegexAnnotation,
+		rewriteTargetAnnotation: {
+			Doc: "",
+		},
+		rewriteSSLAnnotation: {
+			Doc: "",
+		},
+		rewriteEnableRegexAnnotation: {
+			Doc: "",
+		},
+		rewriteAllowListAnnotation: {
+			Doc: "",
+		},
+		rewriteDenyListAnnotation: {
+			Doc: "",
+		},
 	},
 }
 
@@ -38,22 +55,31 @@ func NewParser(r resolver.Resolver) *Proxy {
 func (p *Proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	var err error
 	config := &Config{}
-	config.Target, err = parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
+	config.RewriteTarget, err = parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
 	if err != nil {
 		return nil, err
 	}
 
-	config.Target, err = parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
+	rewriteIpAllowList, err := parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
 	if err != nil {
 		return nil, err
 	}
 
-	config.EnableSSL, err = parser.GetBoolAnnotations(rewriteSSLAnnotation, ing)
+	config.RewriteIpAllowList = strings.Split(rewriteIpAllowList, ",")
+
+	rewriteIpDenyList, err := parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
 	if err != nil {
 		return nil, err
 	}
 
-	config.EnableRegex, err = parser.GetBoolAnnotations(rewriteEnableRegexAnnotation, ing)
+	config.RewriteIpDenyList = strings.Split(rewriteIpDenyList, ",")
+
+	config.RewriteSSL, err = parser.GetBoolAnnotations(rewriteSSLAnnotation, ing)
+	if err != nil {
+		return nil, err
+	}
+
+	config.RewriteEnableRegex, err = parser.GetBoolAnnotations(rewriteEnableRegexAnnotation, ing)
 	if err != nil {
 		return nil, err
 	}

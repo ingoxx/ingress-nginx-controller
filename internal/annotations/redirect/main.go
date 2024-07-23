@@ -13,7 +13,9 @@ const (
 var redirectAnnotation = parser.Annotation{
 	Group: "redirect",
 	Annotations: parser.AnnotationFields{
-		serverRedirectAnnotation: serverRedirectAnnotation,
+		serverRedirectAnnotation: {
+			Doc: "",
+		},
 	},
 }
 

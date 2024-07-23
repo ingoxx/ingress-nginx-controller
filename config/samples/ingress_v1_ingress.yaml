@@ -5,10 +5,10 @@ metadata:
     ingress.nginx.kubebuilder.io/proxy-path: "/ccc/bbb(/|$)/(.*)"
     ingress.nginx.kubebuilder.io/proxy-target: "/$1"
     ingress.nginx.kubebuilder.io/proxy-host: "https://ccc.com"
-    ingress.nginx.kubebuilder.io/proxy-enable-regex: "true"
-#    ingress.nginx.kubebuilder.io/rewrite: "/$1"
-#    ingress.nginx.kubebuilder.io/enable-regex: "true"
-#    ingress.nginx.kubebuilder.io/allowList: "192.168.3.10,192.168.3.12"
+    ingress.nginx.kubebuilder.io/proxy-enable-rewrite: "true"
+#    ingress.nginx.kubebuilder.io/rewrite-target: "/$1"
+#    ingress.nginx.kubebuilder.io/rewrite-enable-regex: "true"
+#    ingress.nginx.kubebuilder.io/rewrite-ip-allow-list: "192.168.3.10,192.168.3.12"
   labels:
     app.kubernetes.io/name: ingress-nginx-kubebuilder
     app.kubernetes.io/managed-by: kustomize
@@ -37,7 +37,7 @@ spec:
                 name: nginx-service-b
                 port:
                   number: 9093
-          - path: "/cc/(/|$)/(.*)"
+          - path: "/bb/(/|$)/(.*)"
             pathType: ImplementationSpecific
             backend:
               service:

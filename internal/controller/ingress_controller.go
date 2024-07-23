@@ -21,6 +21,7 @@ import (
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/nginx"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/pkg/resources"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -78,24 +79,13 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if len(ic.Spec.Rules) > 0 {
-		var svcNotSearchErr error
-		var stop bool
 		for _, v := range ic.Spec.Rules {
-			if stop {
-				break
-			}
 			for _, h := range v.HTTP.Paths {
 				ns = types.NamespacedName{Name: h.Backend.Service.Name, Namespace: ic.Namespace}
 				if err := r.checkService(ctx, ns); err != nil {
-					svcNotSearchErr = err
-					stop = true
-					break
+					klog.Fatal(err)
 				}
 			}
-		}
-
-		if svcNotSearchErr != nil {
-			klog.Fatal(svcNotSearchErr)
 		}
 	}
 
@@ -139,6 +129,8 @@ func (r *IngressReconciler) checkService(ctx context.Context, key client.ObjectK
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *IngressReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	go nginx.Start()
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ingressv1.Ingress{}).
 		Complete(r)

@@ -23,7 +23,9 @@ type SourceRange struct {
 var ipAllowListAnnotations = parser.Annotation{
 	Group: "ipallowlist",
 	Annotations: parser.AnnotationFields{
-		allowListAnnotation: allowListAnnotation,
+		allowListAnnotation: {
+			Doc: "",
+		},
 	},
 }
 

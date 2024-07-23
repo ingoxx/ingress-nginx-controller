@@ -5,6 +5,7 @@ import (
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,6 +16,7 @@ type Resolver interface {
 	GetDefaultService() (*corev1.Service, error)
 	GetService(string) (*corev1.Service, error)
 	GetHostName() []string
+	GetSvcPort(netv1.IngressBackend) int32
 }
 
 type IngressInfo struct {
@@ -82,4 +84,21 @@ func (t *IngressInfo) GetService(name string) (*corev1.Service, error) {
 	}
 
 	return svc, nil
+}
+
+func (t *IngressInfo) GetSvcPort(backend netv1.IngressBackend) int32 {
+	var port int32
+	svc, err := t.GetService(backend.Service.Name)
+	if err != nil {
+		return port
+	}
+
+	for _, svcPort := range svc.Spec.Ports {
+		if svcPort.Port == backend.Service.Port.Number || svcPort.Name == backend.Service.Port.Name {
+			port = backend.Service.Port.Number
+			break
+		}
+	}
+
+	return port
 }
