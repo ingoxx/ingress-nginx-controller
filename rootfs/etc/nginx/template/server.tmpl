@@ -1,31 +1,31 @@
 ## start {{ .Server.HostName }}
 server {
-	listen 80;
-	listen [::]:80;
-	listen 443;
-	listen [::]:443;
-	server_name {{ .Server.HostName }};
+    server_name {{ .Server.HostName }};
+    listen       80;
+    listen  [::]:80;
+    listen       443 http2;
+    listen  [::]:443 http2;
 
-	# {{ if ne .RedirectHost "" }}
-    # Server is hosted at {{ .RedirectHost }}.
-    # {{ end }}
+    {{ if .Server.Tls.TlsNoPass }}
+    ssl_certificate {{ .Server.Tls.TlsCrt }};
+    ssl_certificate_key {{ .Server.Tls.TlsKey }};
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+    ssl_ciphers EECDH+CHACHA20:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_timeout 10m;
+    ssl_session_cache builtin:1000 shared:SSL:10m;
+    ssl_buffer_size 1400;
+    add_header Strict-Transport-Security max-age=15768000;
+    {{ if .Annotations.SSLStapling.SSlStapling }}
+    ssl_stapling on;
+    {{ end }}
+    {{ if .Annotations.SSLStapling.SSllStaplingVerify }}
+    ssl_stapling_verify on;
+    {{ end }}
+    {{ end }}
 
-    #{{ if .RenderSsl }}
-    #    ssl_certificate {{ .Cert }};
-    #    ssl_certificate_key {{ .Key }};
-    #    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-    #    ssl_ciphers EECDH+CHACHA20:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
-    #    ssl_prefer_server_ciphers on;
-    #    ssl_session_timeout 10m;
-    #    ssl_session_cache builtin:1000 shared:SSL:10m;
-    #    ssl_buffer_size 1400;
-    #    add_header Strict-Transport-Security max-age=15768000;
-    #    ssl_stapling on;
-    #    ssl_stapling_verify on;
-    #{{ end }}
-
-    {{ if gt (len .Annotations.Allowlist.CIDR) 0 }}
-    {{ range $ip := .Annotations.Allowlist.CIDR }}
+    {{ if gt (len .Annotations.AllowList.CIDR) 0 }}
+    {{ range $ip := .Annotations.AllowList.CIDR }}
     allow {{ $ip }};{{ end }}
     deny all;
     {{ end }}
@@ -51,10 +51,9 @@ server {
     proxy_set_header Connection "upgrade";
 
     # proxy
-     location {{ .Annotations.Proxy.ProxyPath }} {
-        {{ if .Annotations.Proxy.ProxyEnableRewrite }}
-        rewrite {{ .Annotations.Proxy.ProxyPath }} /{{ .Annotations.Proxy.ProxyTarget }} break;
-        {{ end }}
+    {{ if ne .Annotations.Proxy.ProxyTarget "" }}
+     location ~ ^{{ .Annotations.Proxy.ProxyPath }} {
+        rewrite ^{{ .Annotations.Proxy.ProxyPath }} {{ .Annotations.Proxy.ProxyTarget }} break;
         {{ if .Annotations.Proxy.ProxySSL }}
         proxy_pass https://{{ .Annotations.Proxy.ProxyHost }};
         {{ else }}
@@ -62,19 +61,51 @@ server {
         {{end}}
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
+    {{ else }}
+     location {{ .Annotations.Proxy.ProxyPath }} {
+        {{ if .Annotations.Proxy.ProxySSL }}
+        proxy_pass https://{{ .Annotations.Proxy.ProxyHost }};
+        {{ else }}
+        proxy_pass http://{{ .Annotations.Proxy.ProxyHost }};
+        {{end}}
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    {{ end }}
 
     # backend
     {{ if gt (len .Server.Paths) 0 }}
     {{ range $backend := .Server.Paths }}
-     location {{ .backend.Path }} {
-        {{ if .backend.EnableRegex }}
-        rewrite {{ .backend.Path }} {{ .Annotations.Rewrite.Target }} break;
-        {{ end }}
-        proxy_pass http://{{ .backend.Name }}.{{ .backend.namespace }}.svc:{{ .backend.Port }};
+    {{ if ne .Annotations.Rewrite.RewriteTarget  "" }}
+     location ~ ^{{ $backend.Path }} {
+        rewrite ^{{ $backend.Path }} {{ .Annotations.Rewrite.RewriteTarget }} break;
+        proxy_pass http://{{ $backend.Name }}.{{ $backend.NameSpace }}.svc:{{ $backend.Port }};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-    };{{ end }}
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    {{ else }}
+    location {{ $backend.Path }} {
+        rewrite {{ $backend.Path }} {{ .Annotations.Rewrite.RewriteTarget }} break;
+        proxy_pass http://{{ $backend.Name }}.{{ $backend.NameSpace }}.svc:{{ $backend.Port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    {{ end }}
+    {{ end }}
     {{ end }}
 }
 ## end {{ .Server.HostName }}
+

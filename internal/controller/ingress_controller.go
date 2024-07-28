@@ -20,7 +20,8 @@ import (
 	"context"
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
-	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/controller/store"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/nginx"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/pkg/resources"
 	v1 "k8s.io/api/core/v1"
@@ -45,6 +46,7 @@ type IngressReconciler struct {
 //+kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -89,29 +91,41 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	var ingInfo = resolver.NewIngressInfo(ic, r.Client, ctx)
-	if err := resources.ReconcileResource(r.Client, ic, ctx, ingInfo); err != nil {
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(11)}, nil
+	rs := r.GetReconcilerInfo()
+	rs.Context = ctx
+	rs.Ingress = ic
+	rs.IngressInfos = store.NewIngressInfo(rs)
+
+	if err := resources.ReconcileResource(rs); err != nil {
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(15)}, nil
 	}
 
-	//var tls resolver.TlsFile
-	//parsed, err := annotations.NewAnnotationExtractor(&tls).Extract(ic)
-	//if err != nil {
-	//	logger.Error(err, fmt.Sprintf("fail to parse annotations, ingress name %s", req.Namespace))
-	//	return ctrl.Result{RequeueAfter: time.Second * time.Duration(30)}, nil
-	//}
-	//
-	//var ings = ingressv1.IngressAnnotations{
-	//	Ingress:           ic,
-	//	ParsedAnnotations: parsed,
-	//}
-	//
-	//if err := NewNginxConfigure(r, ctx, ingInfo).GenerateNginxConfigure(ings); err != nil {
-	//	logger.Error(err, fmt.Sprintf("fail to generate nginx configure, ingress name %s", req.Namespace))
-	//	return ctrl.Result{RequeueAfter: time.Second * time.Duration(30)}, nil
-	//}
+	parsed, err := annotations.NewAnnotationExtractor(rs.IngressInfos).Extract(ic)
+	if err != nil {
+		klog.ErrorS(err, fmt.Sprintf("fail to parse annotations, ingress: %s, namespace: %s", req.Namespace, req.Namespace))
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(15)}, nil
+	}
+
+	var ings = annotations.IngressAnnotations{
+		Ingress:           ic,
+		ParsedAnnotations: parsed,
+	}
+
+	if err := NewNginxConfigure(rs).GenerateNginxConfigure(ings); err != nil {
+		klog.ErrorS(err, fmt.Sprintf("fail to generate nginx configure, ingress: %s, namespace: %s", req.Namespace, req.Namespace))
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(15)}, nil
+	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *IngressReconciler) GetReconcilerInfo() *store.IngressReconciler {
+	si := &store.IngressReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}
+
+	return si
 }
 
 func (r *IngressReconciler) checkService(ctx context.Context, key client.ObjectKey) error {

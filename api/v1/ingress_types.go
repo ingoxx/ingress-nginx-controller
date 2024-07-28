@@ -32,6 +32,7 @@ type IngressSpec struct {
 	IngressClassName *string `json:"ingressClassName,omitempty" protobuf:"bytes,4,opt,name=ingressClassName"`
 	// +optional
 	DefaultBackend *netv1.IngressBackend `json:"defaultBackend,omitempty" protobuf:"bytes,1,opt,name=defaultBackend"`
+	// When an ingress instance is created, the corresponding Secret resource will be automatically
 	// +optional
 	TLS []netv1.IngressTLS `json:"tls,omitempty" protobuf:"bytes,2,rep,name=tls"`
 	// +optional
@@ -70,11 +71,17 @@ type Configuration struct {
 }
 
 type Server struct {
-	Name      string           `json:"name"`
-	NameSpace string           `json:"name_space"`
-	HostName  string           `json:"host_name"`
-	Tls       netv1.IngressTLS `json:"tls"`
-	Paths     []*Backend       `json:"paths"`
+	Name      string     `json:"name"`
+	NameSpace string     `json:"name_space"`
+	HostName  string     `json:"host_name"`
+	Tls       SSLCert    `json:"tls"`
+	Paths     []*Backend `json:"paths"`
+}
+
+type SSLCert struct {
+	TlsKey    string `json:"tls-key"`
+	TlsCrt    string `json:"tls-crt"`
+	TlsNoPass bool   `json:"tls-no-pass"`
 }
 
 type Backend struct {
@@ -83,12 +90,9 @@ type Backend struct {
 	Path           string                       `json:"path"`
 	ServiceBackend *netv1.IngressServiceBackend `json:"service_backend"`
 	Port           int32                        `json:"port"`
-	UseRegex       bool                         `json:"use_regex"`
-}
-
-type ServiceBackendPort struct {
-	Name   string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
-	Number int32  `json:"number,omitempty" protobuf:"bytes,2,opt,name=number"`
+	Target         string                       `json:"target"`
+	Annotations    ParseAnnotations             `json:"annotations"`
+	RewritePath    string                       `json:"rewrite_path"`
 }
 
 func init() {

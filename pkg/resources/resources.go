@@ -4,9 +4,11 @@ import (
 	"context"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/controller/store"
 	kerrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
@@ -20,25 +22,27 @@ type Resources struct {
 	dynamicClientSet *dynamic.DynamicClient
 	client           client.Client
 	ingress          *ingressv1.Ingress
+	sc               *runtime.Scheme
 	ctx              context.Context
 }
 
-func ReconcileResource(client client.Client, ing *ingressv1.Ingress, ctx context.Context, rr resolver.Resolver) error {
-	r := NewResource(client, ing, ctx)
-	if err := r.reconcileCert(rr); err != nil {
-		klog.ErrorS(err, "fail to reconcile certificate resource")
+func ReconcileResource(store store.Storer) error {
+	ctlInfo := store.GetReconcilerInfo()
+	r := NewResource(ctlInfo)
+	if err := r.reconcileIssuer(); err != nil {
+		klog.ErrorS(err, "fail to reconcile issuer resource")
 		return err
 	}
 
-	if err := r.reconcileIssuer(); err != nil {
-		klog.ErrorS(err, "fail to reconcile issuer resource")
+	if err := r.reconcileCert(ctlInfo.IngressInfos); err != nil {
+		klog.ErrorS(err, "fail to reconcile certificate resource")
 		return err
 	}
 
 	return nil
 }
 
-func NewResource(client client.Client, ing *ingressv1.Ingress, ctx context.Context) *Resources {
+func NewResource(ctlInfo *store.IngressReconciler) *Resources {
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		inClusterConfig, err := rest.InClusterConfig()
@@ -55,9 +59,10 @@ func NewResource(client client.Client, ing *ingressv1.Ingress, ctx context.Conte
 
 	return &Resources{
 		dynamicClientSet: clientSet,
-		client:           client,
-		ingress:          ing,
-		ctx:              ctx,
+		client:           ctlInfo.Client,
+		ingress:          ctlInfo.Ingress,
+		ctx:              ctlInfo.Context,
+		sc:               ctlInfo.Scheme,
 	}
 }
 
@@ -96,30 +101,35 @@ func (t *Resources) reconcileCert(rr resolver.Resolver) error {
 				return err
 			}
 
+			if _, err := rr.GetSecret(types.NamespacedName{Name: t.ingress.Name + "-secret", Namespace: t.ingress.Namespace}); err != nil {
+				return err
+			}
+
 			return nil
 		}
 		return err
 	}
 
-	spec, found, err := unstructured.NestedMap(certificate.Object, "spec")
+	domains, found, err := unstructured.NestedStringSlice(certificate.Object, "spec", "dnsNames")
 	if !found || err != nil {
 		return err
 	}
 
-	domains, found, err := unstructured.NestedStringSlice(spec, "dnsNames")
-	if !found || err != nil {
-		return err
-	}
-
-	if len(t.ingress.Spec.Rules) != len(domains) && t.ingress.Spec.DefaultBackend == nil {
+	if len(t.ingress.Spec.Rules) != len(domains) {
 		hosts := rr.GetHostName()
-		if err := unstructured.SetNestedStringSlice(spec, hosts, "dnsNames"); err != nil {
+		if err := unstructured.SetNestedStringSlice(certificate.Object, hosts, "spec", "dnsNames"); err != nil {
 			return err
 		}
 
-		if _, err := t.dynamicClientSet.Resource(certGVK).Namespace(t.ingress.Namespace).Update(context.Background(), certificate, metav1.UpdateOptions{}); err != nil {
+		if _, err := t.dynamicClientSet.Resource(certGVK).Namespace(t.ingress.Namespace).Update(context.TODO(), certificate, metav1.UpdateOptions{}); err != nil {
 			return err
 		}
+
+		if _, err := rr.GetSecret(types.NamespacedName{Name: t.ingress.Name + "-secret", Namespace: t.ingress.Namespace}); err != nil {
+			return err
+		}
+
+		klog.Infof("update certificate: %s successfully", t.ingress.Name+"-cert")
 	}
 
 	return nil

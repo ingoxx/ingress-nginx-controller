@@ -1,7 +1,6 @@
 package parser
 
 import (
-	serr "errors"
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	kerr "github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
@@ -11,7 +10,7 @@ import (
 )
 
 const (
-	DefaultAnnotationsPrefix = "nginx.ingress.kubebuilder.io"
+	DefaultAnnotationsPrefix = "ingress.nginx.kubebuilder.io"
 )
 
 var (
@@ -34,23 +33,18 @@ type IngressAnnotation interface {
 	Validate(map[string]string) error
 }
 
+func IsAnnotationsPrefix(annotation string) bool {
+	pattern := `^` + AnnotationsPrefix + "/"
+	re := regexp.MustCompile(pattern)
+	return re.FindStringIndex(annotation) != nil
+}
+
 func TrimAnnotationPrefix(annotation string) string {
 	return strings.TrimPrefix(annotation, AnnotationsPrefix+"/")
 }
 
 func GetAnnotationWithPrefix(suffix string) string {
 	return fmt.Sprintf("%v/%v", AnnotationsPrefix, suffix)
-}
-
-func GetBackendHost(host string) (string, error) {
-	pattern := `((\w+).)+`
-	re := regexp.MustCompile(pattern)
-	domain := re.FindStringSubmatch(host)
-	if len(domain) == 0 {
-		return "", serr.New("host filed cannot be empty")
-	}
-
-	return domain[0], nil
 }
 
 type ingAnnotations map[string]string

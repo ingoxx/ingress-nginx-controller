@@ -61,3 +61,6 @@ func NewInvalidAnnotationContent(name string, val interface{}) error {
 		Name: fmt.Sprintf("the annotation %v does not contain a valid value (%v)", name, val),
 	}
 }
+
+type IsMissAnnotationsVal struct {
+}

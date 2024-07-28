@@ -6,41 +6,23 @@ import (
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations"
-	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/ipallowlist"
-	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/proxy"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/controller/store"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"log"
 	"os"
+	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"strings"
+	"sync"
 	"text/template"
 )
 
 const (
-	nginxTmpl          = "/workspace/rootfs/etc/nginx/template/nginx.tmpl"
-	proxyTmpl          = "/workspace/rootfs/etc/nginx/template/proxy.tmpl"
-	sslTmpl            = "/workspace/rootfs/etc/nginx/template/ssl.tmpl"
-	serverTmpl         = "/workspace/rootfs/etc/nginx/template/server.tmpl"
-	redirectTmpl       = "/workspace/rootfs/etc/nginx/template/redirect.tmpl"
-	defaultBackendTmpl = "/workspace/rootfs/etc/nginx/template/defaultBackend.tmpl"
-	ipAllowListTmpl    = "/workspace/rootfs/etc/nginx/template/ipAllowList.tmpl"
-	ipDenyListTmpl     = "/workspace/rootfs/etc/nginx/template/ipDenyList.tmpl"
-	nginxConf          = "/etc/nginx/nginx.conf"
-	sslPath            = "/etc/nginx/ssl"
-	testConf           = "/etc/nginx/nginx.conf.test"
+	nginxTmpl   = "/rootfs/etc/nginx/template/nginx.tmpl"
+	serverTmpl  = "/rootfs/etc/nginx/template/server.tmpl"
+	sslPath     = "/etc/nginx/ssl"
+	testConfDir = "/etc/nginx/conf.d"
 )
-
-type renderNginxConfigure struct {
-	HostName  string                  `json:"host_name"`
-	Path      string                  `json:"path"`
-	RenderSsl bool                    `json:"render_ssl"`
-	AllowList ipallowlist.SourceRange `json:"allow_list"`
-	DenyList  ipallowlist.SourceRange `json:"deny_list"`
-	Proxy     proxy.Config            `json:"proxy"`
-	Redirect  []string                `json:"redirect"`
-}
 
 type configure struct {
 	Server      *ingressv1.Server
@@ -49,119 +31,39 @@ type configure struct {
 }
 
 type NginxConfigure struct {
-	client client.Client
-	ctx    context.Context
-	rr     resolver.Resolver
+	client  client.Client
+	ctx     context.Context
+	rr      resolver.Resolver
+	mux     *sync.RWMutex
+	ingress *ingressv1.Ingress
 }
 
-func NewNginxConfigure(r client.Client, ctx context.Context, rr resolver.Resolver) *NginxConfigure {
+func NewNginxConfigure(store store.Storer) *NginxConfigure {
+	st := store.GetReconcilerInfo()
 	n := &NginxConfigure{
-		client: r,
-		ctx:    ctx,
-		rr:     rr,
+		client:  st.Client,
+		ctx:     st.Context,
+		rr:      st.IngressInfos,
+		ingress: st.Ingress,
+		mux:     new(sync.RWMutex),
 	}
 	return n
-}
-
-func (n *NginxConfigure) generateBackend(backends []*ingressv1.Backend) (bytes.Buffer, error) {
-	var proxyBytes bytes.Buffer
-	var backendPort int32
-
-	proxyTmplStr, err := os.ReadFile(proxyTmpl)
-	if err != nil {
-		return proxyBytes, err
-	}
-
-	for _, v := range backends {
-		svc, err := n.rr.GetService(v.ServiceBackend.Name)
-		if err != nil {
-			return proxyBytes, err
-		}
-		for _, p := range svc.Spec.Ports {
-			if p.Name == v.ServiceBackend.Name || p.Port == v.ServiceBackend.Port.Number {
-				backendPort = p.Port
-				break
-			}
-		}
-		var data = renderNginxConfigure{
-			HostName: v.Name + strconv.Itoa(int(backendPort)),
-			Path:     v.Path,
-		}
-		parse, err := template.New("proxyTmpl").Parse(string(proxyTmplStr))
-		if err != nil {
-			return proxyBytes, err
-		}
-
-		if err := parse.Execute(&proxyBytes, data); err != nil {
-			return proxyBytes, err
-		}
-
-	}
-
-	return proxyBytes, nil
-}
-
-func (n *NginxConfigure) generateAllowList() (*template.Template, error) {
-	return nil, nil
-}
-
-func (n *NginxConfigure) generateDenyList() (*template.Template, error) {
-	return nil, nil
-}
-
-func (n *NginxConfigure) generateProxy(config *configure) (bytes.Buffer, error) {
-	var proxyBytes bytes.Buffer
-
-	return proxyBytes, nil
-}
-
-func (n *NginxConfigure) generateRedirect(config *configure) (bytes.Buffer, error) {
-	var redirectBytes bytes.Buffer
-	file, err := os.ReadFile(redirectTmpl)
-	if err != nil {
-		return redirectBytes, err
-	}
-
-	redirect := n.readyRenderData(config)
-	for _, v := range redirect.Redirect {
-		var data = struct {
-			HostName string
-			Path     string
-		}{
-			Path:     strings.Split(v, ",")[0],
-			HostName: strings.Split(v, ",")[1],
-		}
-
-		proxyTpl, err := template.New("redirect").Parse(string(file))
-		if err != nil {
-			return redirectBytes, err
-		}
-
-		if err := proxyTpl.Execute(&redirectBytes, data); err != nil {
-			return redirectBytes, err
-		}
-
-	}
-	return redirectBytes, nil
-}
-
-func (n *NginxConfigure) readyRenderData(config *configure) renderNginxConfigure {
-	var data renderNginxConfigure
-	return data
 }
 
 func (n *NginxConfigure) generateServer(config *configure) error {
 	serverStr, err := os.ReadFile(serverTmpl)
 	if err != nil {
+		klog.ErrorS(err, fmt.Sprintf("tmpelate file: %s not found", serverTmpl))
 		return err
 	}
 
 	serverTemp, err := template.New("serverMain").Parse(string(serverStr))
 	if err != nil {
-		log.Fatal("Error parsing nginx.conf.tmpl:", err)
+		klog.ErrorS(err, fmt.Sprintf("error parsing template: %s", serverTmpl))
+		return err
 	}
 
-	if err := serverTemp.Execute(&config.ServerTpl, config.Annotations); err != nil {
+	if err := serverTemp.Execute(&config.ServerTpl, config); err != nil {
 		return err
 	}
 
@@ -171,17 +73,17 @@ func (n *NginxConfigure) generateServer(config *configure) error {
 func (n *NginxConfigure) generateNginxConfigure(cfg *ingressv1.Configuration, annotations *annotations.Ingress) error {
 	mainTmplStr, err := os.ReadFile(nginxTmpl)
 	if err != nil {
+		klog.ErrorS(err, fmt.Sprintf("tmpelate file: %s not found", nginxTmpl))
 		return err
 	}
 
-	mainTmpl, mainErr := template.New("main").Parse(string(mainTmplStr))
-	if mainErr != nil {
-		return mainErr
+	mainTmpl, err := template.New("main").Parse(string(mainTmplStr))
+	if err != nil {
+		klog.ErrorS(err, fmt.Sprintf("error parsing template: %s", nginxTmpl))
+		return err
 	}
 
 	var config = new(configure)
-	var dynamicTmpl bytes.Buffer
-	config.ServerTpl = dynamicTmpl
 	config.Annotations = annotations
 	if cfg != nil {
 		for _, v := range cfg.Servers {
@@ -193,11 +95,7 @@ func (n *NginxConfigure) generateNginxConfigure(cfg *ingressv1.Configuration, an
 		}
 	}
 
-	if err := n.generateServer(config); err != nil {
-		return err
-	}
-
-	//生成的server块: server {}插入到指定位置
+	//生成的server块插入到指定位置
 	_, err = mainTmpl.New("servers").Parse(config.ServerTpl.String())
 	if err != nil {
 		return err
@@ -205,7 +103,7 @@ func (n *NginxConfigure) generateNginxConfigure(cfg *ingressv1.Configuration, an
 
 	// 执行渲染
 	var tpl bytes.Buffer
-	err = mainTmpl.Execute(os.Stdout, nil)
+	err = mainTmpl.Execute(&tpl, nil)
 	if err != nil {
 		return err
 	}
@@ -218,8 +116,8 @@ func (n *NginxConfigure) generateNginxConfigure(cfg *ingressv1.Configuration, an
 }
 
 func (n *NginxConfigure) generateTestConf(b []byte) error {
-	if err := os.WriteFile(testConf, b, 0644); err != nil {
-		klog.ErrorS(err, "an error occurred while writing the generated template content to testConf.")
+	if err := os.WriteFile(filepath.Join(testConfDir, n.ingress.Name+"-test.conf"), b, 0644); err != nil {
+		klog.ErrorS(err, fmt.Sprintf("an error occurred while writing the generated template content to %s", testConfDir))
 		return err
 	}
 
@@ -227,10 +125,14 @@ func (n *NginxConfigure) generateTestConf(b []byte) error {
 }
 
 func (n *NginxConfigure) GenerateNginxConfigure(ingress annotations.IngressAnnotations) error {
+	n.mux.Lock()
+	defer n.mux.Unlock()
 	cfg := n.getBackendConfigure(ingress)
-	defaultServer, err := n.getDefaultBackendConfigure(ingress)
-	if err == nil && defaultServer != nil {
-		cfg.Servers = append(cfg.Servers, defaultServer)
+	if ingress.Ingress.Spec.DefaultBackend != nil {
+		defaultServer, err := n.getDefaultBackendConfigure(ingress)
+		if err == nil {
+			cfg.Servers = append(cfg.Servers, defaultServer)
+		}
 	}
 
 	if cfg == nil {
@@ -240,6 +142,8 @@ func (n *NginxConfigure) GenerateNginxConfigure(ingress annotations.IngressAnnot
 	if err := n.generateNginxConfigure(cfg, ingress.ParsedAnnotations); err != nil {
 		return err
 	}
+
+	klog.Info("update nginx configure successfully")
 
 	//if err := nginx.Reload(nginxConf, testConf); err != nil {
 	//	return err
@@ -286,12 +190,19 @@ func (n *NginxConfigure) getBackendConfigure(ingress annotations.IngressAnnotati
 	var rule = ingress.Ingress.Spec.Rules
 	var servers = make([]*ingressv1.Server, len(rule))
 
-	for _, v := range rule {
+	tls, err := n.generateTlsFile(ingress)
+	if err != nil {
+		tls.TlsNoPass = false
+	}
+
+	for k, v := range rule {
 		var backend = make([]*ingressv1.Backend, len(v.HTTP.Paths))
-		for _, p := range v.HTTP.Paths {
+		for bk, p := range v.HTTP.Paths {
 			if ingress.ParsedAnnotations.Rewrite.RewriteEnableRegex {
 				if *p.PathType != "ImplementationSpecific" {
-					klog.ErrorS(fmt.Errorf("when annotations rewrite-enable-regex is true, the value of pathType must be: ImplementationSpecific"), fmt.Sprintf("namespace: %s", ingress.Ingress.Namespace))
+					klog.ErrorS(
+						fmt.Errorf("when annotations rewrite-enable-regex is true, the value of pathType must be: ImplementationSpecific"),
+						fmt.Sprintf("ingress: %s, namespace: %s", ingress.Ingress.Name, ingress.Ingress.Namespace))
 					return nil
 				}
 			}
@@ -313,9 +224,9 @@ func (n *NginxConfigure) getBackendConfigure(ingress annotations.IngressAnnotati
 				Path:           p.Path,
 				Port:           backendPort,
 				ServiceBackend: p.Backend.Service,
-				UseRegex:       ingress.ParsedAnnotations.Rewrite.RewriteEnableRegex,
+				Annotations:    ingress.ParsedAnnotations,
 			}
-			backend = append(backend, b)
+			backend = append(backend[:bk], b)
 		}
 
 		s := &ingressv1.Server{
@@ -323,10 +234,37 @@ func (n *NginxConfigure) getBackendConfigure(ingress annotations.IngressAnnotati
 			NameSpace: ingress.Ingress.Namespace,
 			HostName:  v.Host,
 			Paths:     backend,
+			Tls:       tls,
 		}
 
-		servers = append(servers, s)
+		servers = append(servers[:k], s)
 	}
 
 	return &ingressv1.Configuration{Servers: servers}
+}
+
+func (n *NginxConfigure) generateTlsFile(ingress annotations.IngressAnnotations) (ingressv1.SSLCert, error) {
+	var ssl = ingressv1.SSLCert{
+		TlsNoPass: true,
+	}
+	key := types.NamespacedName{Name: ingress.Ingress.Name + "-secret", Namespace: ingress.Ingress.Namespace}
+	data, err := n.rr.GetTlsData(key)
+	if err != nil {
+		return ssl, err
+	}
+
+	for k, v := range data {
+		file := filepath.Join(sslPath, k)
+		if err := os.WriteFile(file, v, 0644); err != nil {
+			klog.ErrorS(err, fmt.Sprintf("an error occurred while writing the generated template content to %s.", file))
+			return ssl, err
+		}
+		if k == "tls.crt" {
+			ssl.TlsCrt = file
+		} else if k == "tls.key" {
+			ssl.TlsKey = file
+		}
+	}
+
+	return ssl, nil
 }

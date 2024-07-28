@@ -1,10 +1,13 @@
 package ipdenylist
 
 import (
+	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"strings"
 )
 
@@ -12,7 +15,7 @@ const (
 	denyListAnnotation = "denyList"
 )
 
-type Proxy struct {
+type ipdenyList struct {
 	r resolver.Resolver
 }
 
@@ -24,19 +27,21 @@ var ipDenyListAnnotations = parser.Annotation{
 	Group: "ipdenylist",
 	Annotations: parser.AnnotationFields{
 		denyListAnnotation: {
-			Doc: "",
+			Doc: "deny ip, eg: 2.2.2.2",
 		},
 	},
 }
 
-func NewParser(r resolver.Resolver) *Proxy {
-	return &Proxy{}
+func NewParser(r resolver.Resolver) parser.IngressAnnotation {
+	return &ipdenyList{}
 }
 
-func (p *Proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
+func (p *ipdenyList) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	val, err := parser.GetStringAnnotation(denyListAnnotation, ing)
 	if err != nil {
-		return nil, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to empty slice", denyListAnnotation)
+		}
 	}
 
 	aliases := sets.NewString()
@@ -44,6 +49,9 @@ func (p *Proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 		alias = strings.TrimSpace(alias)
 		if alias == "" {
 			continue
+		}
+		if !parser.PassIsIp(alias) {
+			return nil, fmt.Errorf("the annotation %s does not contain a valid IP address", denyListAnnotation)
 		}
 
 		if !aliases.Has(alias) {
@@ -56,6 +64,6 @@ func (p *Proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	return &SourceRange{l}, nil
 }
 
-func (p *Proxy) Validate(anns map[string]string) error {
+func (p *ipdenyList) Validate(anns map[string]string) error {
 	return parser.CheckAnnotations(anns, ipDenyListAnnotations.Annotations)
 }

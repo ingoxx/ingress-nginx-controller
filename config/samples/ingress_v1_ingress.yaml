@@ -2,13 +2,15 @@ apiVersion: ingress.nginx.kubebuilder.io/v1
 kind: Ingress
 metadata:
   annotations:
-    ingress.nginx.kubebuilder.io/proxy-path: "/ccc/bbb(/|$)/(.*)"
+    ingress.nginx.kubebuilder.io/proxy-path: "/k8s(/|$)/(.*)"
     ingress.nginx.kubebuilder.io/proxy-target: "/$1"
-    ingress.nginx.kubebuilder.io/proxy-host: "https://ccc.com"
     ingress.nginx.kubebuilder.io/proxy-enable-rewrite: "true"
-#    ingress.nginx.kubebuilder.io/rewrite-target: "/$1"
-#    ingress.nginx.kubebuilder.io/rewrite-enable-regex: "true"
-#    ingress.nginx.kubebuilder.io/rewrite-ip-allow-list: "192.168.3.10,192.168.3.12"
+    ingress.nginx.kubebuilder.io/proxy-host: "ccc.com"
+    ingress.nginx.kubebuilder.io/proxy-enable-regex: "true"
+    ingress.nginx.kubebuilder.io/ssl-stapling-verify: "false"
+    ingress.nginx.kubebuilder.io/ssl-stapling: "false"
+    ingress.nginx.kubebuilder.io/rewrite-enable-regex: "true"
+    ingress.nginx.kubebuilder.io/rewrite-target: "/$1"
   labels:
     app.kubernetes.io/name: ingress-nginx-kubebuilder
     app.kubernetes.io/managed-by: kustomize
@@ -20,8 +22,8 @@ spec:
     - host: "*.a.com"
       http:
         paths:
-          - path: "/"
-            pathType: prefix
+          - path: "/(.*)"
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: nginx-service-a
@@ -30,18 +32,17 @@ spec:
     - host: "b.com"
       http:
         paths:
-          - path: "/bb/(/|$)/(.*)"
+          - path: "/bb(.*)"
             pathType: ImplementationSpecific
             backend:
               service:
                 name: nginx-service-b
                 port:
                   number: 9093
-          - path: "/bb/(/|$)/(.*)"
+          - path: "/cc(.*)"
             pathType: ImplementationSpecific
             backend:
               service:
                 name: nginx-service-c
                 port:
                   number: 9094
-

@@ -1,92 +1,100 @@
 package rewrite
 
 import (
+	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
+	"k8s.io/klog/v2"
 	"strings"
 )
 
 const (
 	rewriteTargetAnnotation      = "rewrite-target"
-	rewriteSSLAnnotation         = "rewrite-ssl"
+	rewriteSSLAnnotation         = "rewrite-sslstapling"
 	rewriteEnableRegexAnnotation = "rewrite-enable-regex"
 	rewriteAllowListAnnotation   = "rewrite-ip-allow-list"
 	rewriteDenyListAnnotation    = "rewrite-ip-deny-list"
 )
 
-type Proxy struct {
+type rewrite struct {
 	r resolver.Resolver
 }
 
 type Config struct {
 	RewriteTarget      string   `json:"rewrite-target"`
-	RewriteSSL         bool     `json:"rewrite-ssl"`
 	RewriteEnableRegex bool     `json:"rewrite-enable-regex"`
 	RewriteIpAllowList []string `json:"rewrite-ip-allow-list"`
 	RewriteIpDenyList  []string `json:"rewrite-ip-deny-list"`
 }
 
-var proxyAnnotation = parser.Annotation{
+var rewriteAnnotation = parser.Annotation{
 	Group: "rewrite",
 	Annotations: parser.AnnotationFields{
 		rewriteTargetAnnotation: {
-			Doc: "",
+			Doc: "rewrite target",
 		},
 		rewriteSSLAnnotation: {
-			Doc: "",
+			Doc: "sslstapling",
 		},
 		rewriteEnableRegexAnnotation: {
-			Doc: "",
+			Doc: "regex",
 		},
 		rewriteAllowListAnnotation: {
-			Doc: "",
+			Doc: "ip",
 		},
 		rewriteDenyListAnnotation: {
-			Doc: "",
+			Doc: "ip",
 		},
 	},
 }
 
-func NewParser(r resolver.Resolver) *Proxy {
-	return &Proxy{}
+func NewParser(r resolver.Resolver) parser.IngressAnnotation {
+	return &rewrite{}
 }
 
-func (p *Proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
+func (p *rewrite) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	var err error
 	config := &Config{}
 	config.RewriteTarget, err = parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
 	if err != nil {
-		return nil, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to empty", rewriteTargetAnnotation)
+		}
 	}
 
-	rewriteIpAllowList, err := parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
+	rewriteIpAllowList, err := parser.GetStringAnnotation(rewriteAllowListAnnotation, ing)
 	if err != nil {
-		return nil, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to empty", rewriteTargetAnnotation)
+		}
 	}
 
 	config.RewriteIpAllowList = strings.Split(rewriteIpAllowList, ",")
-
-	rewriteIpDenyList, err := parser.GetStringAnnotation(rewriteTargetAnnotation, ing)
+	rewriteIpDenyList, err := parser.GetStringAnnotation(rewriteDenyListAnnotation, ing)
 	if err != nil {
-		return nil, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to empty", rewriteDenyListAnnotation)
+		}
 	}
 
 	config.RewriteIpDenyList = strings.Split(rewriteIpDenyList, ",")
 
-	config.RewriteSSL, err = parser.GetBoolAnnotations(rewriteSSLAnnotation, ing)
-	if err != nil {
-		return nil, err
-	}
-
 	config.RewriteEnableRegex, err = parser.GetBoolAnnotations(rewriteEnableRegexAnnotation, ing)
 	if err != nil {
-		return nil, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to false", rewriteEnableRegexAnnotation)
+		}
+	}
+
+	if config.RewriteTarget != "" && !config.RewriteEnableRegex {
+		return config, fmt.Errorf("if annotations %s is not empty, annotations %s must be true", rewriteTargetAnnotation, rewriteEnableRegexAnnotation)
 	}
 
 	return config, nil
 }
 
-func (p *Proxy) Validate(anns map[string]string) error {
-	return parser.CheckAnnotations(anns, proxyAnnotation.Annotations)
+func (p *rewrite) Validate(anns map[string]string) error {
+	return parser.CheckAnnotations(anns, rewriteAnnotation.Annotations)
 }

@@ -90,7 +90,7 @@ func (r *Ingress) ValidPath() error {
 		}
 		for _, p := range v.IngressRuleValue.HTTP.Paths {
 			if p.Path == path {
-				return fmt.Errorf("the paths in the same host cannot be the same, ingress: %s, namespace: %s", r.Name, r.Namespace)
+				return fmt.Errorf("not allow duplicate path: %s, ingress: %s, namespace: %s", path, r.Name, r.Namespace)
 			}
 			path = p.Path
 		}

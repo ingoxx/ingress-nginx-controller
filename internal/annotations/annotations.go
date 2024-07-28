@@ -9,6 +9,7 @@ import (
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/redirect"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/rewrite"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/sslstapling"
 	kerr "github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
 	"github.com/imdario/mergo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,21 +27,25 @@ type IngressAnnotations struct {
 
 type Ingress struct {
 	metav1.ObjectMeta
-	Proxy     proxy.Config
-	Rewrite   rewrite.Config
-	Redirect  redirect.Config
-	AllowList ipallowlist.SourceRange
-	DenyList  ipdenylist.SourceRange
+	Proxy       proxy.Config
+	Rewrite     rewrite.Config
+	Redirect    redirect.Config
+	SSLStapling sslstapling.Config
+	AllowList   ipallowlist.SourceRange
+	DenyList    ipdenylist.SourceRange
 }
+
+func (*Ingress) GetIngressAnnotations() {}
 
 func NewAnnotationExtractor(r resolver.Resolver) *Extractor {
 	return &Extractor{
 		map[string]parser.IngressAnnotation{
-			"Proxy":     proxy.NewParser(r),
-			"Redirect":  redirect.NewParser(r),
-			"AllowList": ipallowlist.NewParser(r),
-			"DenyList":  ipdenylist.NewParser(r),
-			"Rewrite":   rewrite.NewParser(r),
+			"proxy":       proxy.NewParser(r),
+			"Redirect":    redirect.NewParser(r),
+			"AllowList":   ipallowlist.NewParser(r),
+			"DenyList":    ipdenylist.NewParser(r),
+			"Rewrite":     rewrite.NewParser(r),
+			"SSLStapling": sslstapling.NewParser(r),
 		},
 	}
 }
@@ -67,6 +72,7 @@ func (e Extractor) Extract(ing *ingressv1.Ingress) (*Ingress, error) {
 				continue
 			}
 		}
+
 		if val != nil {
 			data[name] = val
 		}
