@@ -62,5 +62,22 @@ func NewInvalidAnnotationContent(name string, val interface{}) error {
 	}
 }
 
-type IsMissAnnotationsVal struct {
+type InvalidIngressContentError struct {
+	Name string
+}
+
+func (e InvalidIngressContentError) Error() string {
+	return e.Name
+}
+
+func NewInvalidIngressContent(name string, val interface{}) error {
+	return InvalidIngressContentError{
+		Name: fmt.Sprintf("the ingress %v does not contain a valid value (%v)", name, val),
+	}
+}
+
+func IsInvalidIngressContentError(e error) bool {
+	var invalidIngressContentError InvalidIngressContentError
+	ok := errors.As(e, &invalidIngressContentError)
+	return ok
 }

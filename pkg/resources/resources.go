@@ -12,8 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -26,39 +24,33 @@ type Resources struct {
 	ctx              context.Context
 }
 
+// ReconcileResource If the spec.tls field is not empty, the certificate and issuer resources here will not be created.
 func ReconcileResource(store store.Storer) error {
 	ctlInfo := store.GetReconcilerInfo()
 	r := NewResource(ctlInfo)
-	if err := r.reconcileIssuer(); err != nil {
-		klog.ErrorS(err, "fail to reconcile issuer resource")
-		return err
+
+	if len(r.ingress.Spec.Rules) == 0 {
+		return nil
 	}
 
-	if err := r.reconcileCert(ctlInfo.IngressInfos); err != nil {
-		klog.ErrorS(err, "fail to reconcile certificate resource")
-		return err
+	if len(r.ingress.Spec.TLS) == 0 {
+		if err := r.reconcileIssuer(); err != nil {
+			klog.ErrorS(err, "fail to reconcile issuer resource")
+			return err
+		}
+
+		if err := r.reconcileCert(ctlInfo.IngressInfos); err != nil {
+			klog.ErrorS(err, "fail to reconcile certificate resource")
+			return err
+		}
 	}
 
 	return nil
 }
 
 func NewResource(ctlInfo *store.IngressReconciler) *Resources {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		inClusterConfig, err := rest.InClusterConfig()
-		if err != nil {
-			klog.Fatalf("fail to create InClusterConfig: %v", err)
-		}
-		config = inClusterConfig
-	}
-
-	clientSet, err := dynamic.NewForConfig(config)
-	if err != nil {
-		klog.Fatalf("fail to create clientSet: %v", err)
-	}
-
 	return &Resources{
-		dynamicClientSet: clientSet,
+		dynamicClientSet: ctlInfo.DynamicClientSet,
 		client:           ctlInfo.Client,
 		ingress:          ctlInfo.Ingress,
 		ctx:              ctlInfo.Context,

@@ -25,9 +25,13 @@ import (
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/nginx"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/pkg/resources"
 	v1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,7 +41,10 @@ import (
 // IngressReconciler reconciles a Ingress object
 type IngressReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme        *runtime.Scheme
+	dynamicClient *dynamic.DynamicClient
+	ctx           context.Context
+	ingress       *ingressv1.Ingress
 }
 
 //+kubebuilder:rbac:groups=ingress.nginx.kubebuilder.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
@@ -67,15 +74,19 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if len(ic.Spec.Rules) == 0 && ic.Spec.DefaultBackend == nil {
-		klog.Info(fmt.Sprintf("due to the empty values of spec field, the ingress controller will not take any action, ingress name %s", req.Name))
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(11)}, nil
+	rs := r.GetReconcilerInfo()
+	rs.Context = ctx
+	rs.Ingress = ic
+
+	if info := r.checkController(); info != nil {
+		klog.Infoln(info)
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(30)}, nil
 	}
 
-	var ns client.ObjectKey
+	var key client.ObjectKey
 	if ic.Spec.DefaultBackend != nil {
-		ns = types.NamespacedName{Name: ic.Spec.DefaultBackend.Service.Name, Namespace: ic.Namespace}
-		if err := r.checkService(ctx, ns); err != nil {
+		key = types.NamespacedName{Name: ic.Spec.DefaultBackend.Service.Name, Namespace: ic.Namespace}
+		if err := r.checkService(key); err != nil {
 			klog.Fatal(err)
 		}
 	}
@@ -83,17 +94,15 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if len(ic.Spec.Rules) > 0 {
 		for _, v := range ic.Spec.Rules {
 			for _, h := range v.HTTP.Paths {
-				ns = types.NamespacedName{Name: h.Backend.Service.Name, Namespace: ic.Namespace}
-				if err := r.checkService(ctx, ns); err != nil {
+				key = types.NamespacedName{Name: h.Backend.Service.Name, Namespace: ic.Namespace}
+				if err := r.checkService(key); err != nil {
 					klog.Fatal(err)
 				}
 			}
 		}
 	}
 
-	rs := r.GetReconcilerInfo()
-	rs.Context = ctx
-	rs.Ingress = ic
+	rs.DynamicClientSet = r.dynamicClient
 	rs.IngressInfos = store.NewIngressInfo(rs)
 
 	if err := resources.ReconcileResource(rs); err != nil {
@@ -102,17 +111,16 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	parsed, err := annotations.NewAnnotationExtractor(rs.IngressInfos).Extract(ic)
 	if err != nil {
-		klog.ErrorS(err, fmt.Sprintf("fail to parse annotations, ingress: %s, namespace: %s", req.Namespace, req.Namespace))
+		klog.ErrorS(err, fmt.Sprintf("fail to parse annotations in ingress: %s, namespace: %s", req.Name, req.Namespace))
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(15)}, nil
 	}
 
 	var ings = annotations.IngressAnnotations{
-		Ingress:           ic,
 		ParsedAnnotations: parsed,
 	}
 
-	if err := NewNginxConfigure(rs).GenerateNginxConfigure(ings); err != nil {
-		klog.ErrorS(err, fmt.Sprintf("fail to generate nginx configure, ingress: %s, namespace: %s", req.Namespace, req.Namespace))
+	if err := NewNginxController(rs).GenerateConfigure(ings); err != nil {
+		klog.ErrorS(err, fmt.Sprintf("error in ingress: %s, namespace: %s", req.Name, req.Namespace))
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(15)}, nil
 	}
 
@@ -128,9 +136,11 @@ func (r *IngressReconciler) GetReconcilerInfo() *store.IngressReconciler {
 	return si
 }
 
-func (r *IngressReconciler) checkService(ctx context.Context, key client.ObjectKey) error {
+func (r *IngressReconciler) checkService(key client.ObjectKey) error {
 	svc := new(v1.Service)
-	if err := r.Get(ctx, key, svc); err != nil {
+	rs := r.GetReconcilerInfo()
+
+	if err := r.Get(rs.Context, key, svc); err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("no service with name %v found in namespace %v: %v", key.Name, key.Namespace, err)
 		}
@@ -141,10 +151,53 @@ func (r *IngressReconciler) checkService(ctx context.Context, key client.ObjectK
 	return nil
 }
 
+func (r *IngressReconciler) createDynamicClientSet() *dynamic.DynamicClient {
+	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+	if err != nil {
+		inClusterConfig, err := rest.InClusterConfig()
+		if err != nil {
+			klog.Fatalf("fail to create clusterConfig: %v", err)
+		}
+		config = inClusterConfig
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		klog.Fatalf("fail to create dynamicClient: %v", err)
+	}
+
+	return dynamicClient
+}
+
+func (r *IngressReconciler) checkController() error {
+	ic := new(netv1.IngressClass)
+	rs := r.GetReconcilerInfo()
+
+	if rs.Ingress.Spec.IngressClassName == "" && rs.Ingress.Annotations["kubernetes.io/ingress.class"] == "" {
+		return fmt.Errorf("the current controller can be used by adding ingressClass or annotating specified values")
+	}
+
+	if rs.Ingress.Annotations["kubernetes.io/ingress.class"] == nginxAnnotation {
+		return nil
+	}
+
+	key := types.NamespacedName{Name: rs.Ingress.Spec.IngressClassName, Namespace: rs.Ingress.Namespace}
+	if err := r.Get(rs.Context, key, ic); err != nil {
+		return err
+	}
+
+	if ic.Spec.Controller != controller {
+		return fmt.Errorf("neither ingressClass nor nginxAnnotation value matches the current controller")
+	}
+
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *IngressReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	go nginx.Start()
 
+	r.dynamicClient = r.createDynamicClientSet()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ingressv1.Ingress{}).
 		Complete(r)

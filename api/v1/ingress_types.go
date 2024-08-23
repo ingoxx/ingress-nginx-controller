@@ -29,7 +29,7 @@ type IngressSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	// +optional
-	IngressClassName *string `json:"ingressClassName,omitempty" protobuf:"bytes,4,opt,name=ingressClassName"`
+	IngressClassName string `json:"ingressClassName,omitempty" protobuf:"bytes,4,opt,name=ingressClassName"`
 	// +optional
 	DefaultBackend *netv1.IngressBackend `json:"defaultBackend,omitempty" protobuf:"bytes,1,opt,name=defaultBackend"`
 	// When an ingress instance is created, the corresponding Secret resource will be automatically
@@ -90,7 +90,7 @@ type Backend struct {
 	Path           string                       `json:"path"`
 	ServiceBackend *netv1.IngressServiceBackend `json:"service_backend"`
 	Port           int32                        `json:"port"`
-	Target         string                       `json:"target"`
+	TargetPath     string                       `json:"target_path"`
 	Annotations    ParseAnnotations             `json:"annotations"`
 	RewritePath    string                       `json:"rewrite_path"`
 }

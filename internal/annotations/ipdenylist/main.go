@@ -37,7 +37,7 @@ func NewParser(r resolver.Resolver) parser.IngressAnnotation {
 }
 
 func (p *ipdenyList) Parse(ing *ingressv1.Ingress) (interface{}, error) {
-	val, err := parser.GetStringAnnotation(denyListAnnotation, ing)
+	val, err := parser.GetStringAnnotation(denyListAnnotation, ing, ipDenyListAnnotations.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to empty slice", denyListAnnotation)

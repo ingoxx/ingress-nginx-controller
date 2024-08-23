@@ -1,6 +1,7 @@
 package annotations
 
 import (
+	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/ipallowlist"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/ipdenylist"
@@ -21,8 +22,7 @@ type Extractor struct {
 }
 
 type IngressAnnotations struct {
-	Ingress           *ingressv1.Ingress `json:"ingress"`
-	ParsedAnnotations *Ingress           `json:"parsed_annotations"`
+	ParsedAnnotations *Ingress `json:"parsed_annotations"`
 }
 
 type Ingress struct {
@@ -64,7 +64,12 @@ func (e Extractor) Extract(ing *ingressv1.Ingress) (*Ingress, error) {
 		klog.V(5).InfoS("Parsing Ingress annotation", "name", name, "ingress", klog.KObj(ing), "value", val)
 		if err != nil {
 			if kerr.IsValidationError(err) {
-				klog.ErrorS(err, "ingress contains invalid annotation value")
+				klog.ErrorS(err, fmt.Sprintf("ingress annotations contains invalid annotation value"))
+				return nil, err
+			}
+
+			if kerr.IsInvalidIngressContentError(err) {
+				klog.ErrorS(err, fmt.Sprintf("ingress contains invalid annotation value"))
 				return nil, err
 			}
 

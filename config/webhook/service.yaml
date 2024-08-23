@@ -23,6 +23,7 @@ metadata:
   name: ingress-nginx-controller
   namespace: system
 spec:
+  externalTrafficPolicy: Local
   type: LoadBalancer
   ports:
     - port: 443

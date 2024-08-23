@@ -36,7 +36,7 @@ func NewParser(r resolver.Resolver) parser.IngressAnnotation {
 func (r *redirect) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	var err error
 	config := &Config{}
-	config.Host, err = parser.GetStringAnnotation(serverRedirectAnnotation, ing)
+	config.Host, err = parser.GetStringAnnotation(serverRedirectAnnotation, ing, redirectAnnotation.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to empty", serverRedirectAnnotation)

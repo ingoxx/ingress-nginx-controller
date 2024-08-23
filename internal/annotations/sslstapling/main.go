@@ -41,7 +41,7 @@ func NewParser(r resolver.Resolver) parser.IngressAnnotation {
 func (p *SSl) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	var err error
 	config := &Config{}
-	config.SSllStaplingVerify, err = parser.GetBoolAnnotations(sslStaplingVerify, ing)
+	config.SSllStaplingVerify, err = parser.GetBoolAnnotations(sslStaplingVerify, ing, sslAnnotations.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to false", sslStaplingVerify)
@@ -49,7 +49,7 @@ func (p *SSl) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 		config.SSllStaplingVerify = false
 	}
 
-	config.SSlStapling, err = parser.GetBoolAnnotations(sslStapling, ing)
+	config.SSlStapling, err = parser.GetBoolAnnotations(sslStapling, ing, sslAnnotations.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to false", sslStapling)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	kerr "github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -25,18 +24,13 @@ type Annotation struct {
 }
 
 type AnnotationConfig struct {
-	Doc string
+	Doc       string
+	Validator AnnotationValidator
 }
 
 type IngressAnnotation interface {
 	Parse(*ingressv1.Ingress) (interface{}, error)
 	Validate(map[string]string) error
-}
-
-func IsAnnotationsPrefix(annotation string) bool {
-	pattern := `^` + AnnotationsPrefix + "/"
-	re := regexp.MustCompile(pattern)
-	return re.FindStringIndex(annotation) != nil
 }
 
 func TrimAnnotationPrefix(annotation string) string {
@@ -88,16 +82,16 @@ func (a ingAnnotations) parseBool(name string) (bool, error) {
 	return false, kerr.ErrMissingAnnotations
 }
 
-func GetStringAnnotation(name string, ing *ingressv1.Ingress) (string, error) {
-	key, err := CheckAnnotationsKey(name, ing)
+func GetStringAnnotation(name string, ing *ingressv1.Ingress, field AnnotationFields) (string, error) {
+	key, err := CheckAnnotationsKey(name, ing, field)
 	if err != nil {
 		return "", err
 	}
 	return ingAnnotations(ing.GetAnnotations()).parseString(key)
 }
 
-func GetBoolAnnotations(name string, ing *ingressv1.Ingress) (bool, error) {
-	key, err := CheckAnnotationsKey(name, ing)
+func GetBoolAnnotations(name string, ing *ingressv1.Ingress, field AnnotationFields) (bool, error) {
+	key, err := CheckAnnotationsKey(name, ing, field)
 	if err != nil {
 		return false, err
 	}

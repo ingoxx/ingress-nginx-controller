@@ -10,12 +10,11 @@ import (
 )
 
 const (
-	proxyPathAnnotation          = "proxy-path"
-	proxyHostAnnotation          = "proxy-host"
-	proxyTargetAnnotation        = "proxy-target"
-	proxySSLAnnotation           = "proxy-sslstapling"
-	proxyEnableRewriteAnnotation = "proxy-enable-rewrite"
-	proxyEnableRegex             = "proxy-enable-regex"
+	proxyPathAnnotation   = "proxy-path"
+	proxyHostAnnotation   = "proxy-host"
+	proxyTargetAnnotation = "proxy-target"
+	proxySSLAnnotation    = "proxy-sslstapling"
+	proxyEnableRegex      = "proxy-enable-regex"
 )
 
 // The role of a proxy is to forward traffic requests to the cluster to the outside of the cluster
@@ -24,12 +23,12 @@ type proxy struct {
 }
 
 type Config struct {
-	ProxyPath          string `json:"proxy-path"`
-	ProxyHost          string `json:"proxy-host"`
-	ProxyTarget        string `json:"proxy-target"`
-	ProxySSL           bool   `json:"proxy-sslstapling"`
-	ProxyEnableRewrite bool   `json:"proxy-enable-rewrite"`
-	ProxyEnableRegex   bool   `json:"proxy-enable-regex"`
+	ProxyPath        string `json:"proxy-path"`
+	ProxyHost        string `json:"proxy-host"`
+	ProxyTarget      string `json:"proxy-target"`
+	ProxyTargetPath  string `json:"proxy-target-path"`
+	ProxySSL         bool   `json:"proxy-sslstapling"`
+	ProxyEnableRegex bool   `json:"proxy-enable-regex"`
 }
 
 var proxyAnnotation = parser.Annotation{
@@ -47,9 +46,6 @@ var proxyAnnotation = parser.Annotation{
 		proxyTargetAnnotation: {
 			Doc: "when the ProxyEnableRewrite is true, choose it, e.g: /$1,$2..., optional",
 		},
-		proxyEnableRewriteAnnotation: {
-			Doc: "whether to enable the rewrite function, optional",
-		},
 		proxyEnableRegex: {
 			Doc: "This annotation defines if the paths defined on an Ingress use regular expressions. To use regex on path\n\t\t\tthe pathType should also be defined as 'ImplementationSpecific'., optional",
 		},
@@ -63,57 +59,91 @@ func NewParser(r resolver.Resolver) parser.IngressAnnotation {
 func (p *proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	var err error
 	config := &Config{}
-	config.ProxyPath, err = parser.GetStringAnnotation(proxyPathAnnotation, ing)
+	config.ProxyPath, err = parser.GetStringAnnotation(proxyPathAnnotation, ing, proxyAnnotation.Annotations)
 	if err != nil {
-		klog.ErrorS(err, fmt.Sprintf("%s not allow empty", proxyPathAnnotation))
-		return config, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to empty", proxyPathAnnotation)
+		}
 	}
 
-	config.ProxyHost, err = parser.GetStringAnnotation(proxyHostAnnotation, ing)
+	config.ProxyHost, err = parser.GetStringAnnotation(proxyHostAnnotation, ing, proxyAnnotation.Annotations)
 	if err != nil {
-		klog.ErrorS(err, fmt.Sprintf("%s not allow empty", proxyHostAnnotation))
-		return config, err
+		if errors.IsValidationError(err) {
+			klog.Warningf("%s is invalid, defaulting to empty", proxyHostAnnotation)
+		}
 	}
 
-	config.ProxyTarget, err = parser.GetStringAnnotation(proxyTargetAnnotation, ing)
+	config.ProxyTarget, err = parser.GetStringAnnotation(proxyTargetAnnotation, ing, proxyAnnotation.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to empty", proxyTargetAnnotation)
 		}
 	}
 
-	config.ProxySSL, err = parser.GetBoolAnnotations(proxySSLAnnotation, ing)
+	config.ProxySSL, err = parser.GetBoolAnnotations(proxySSLAnnotation, ing, proxyAnnotation.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to false", proxySSLAnnotation)
 		}
 	}
 
-	config.ProxyEnableRewrite, err = parser.GetBoolAnnotations(proxyEnableRewriteAnnotation, ing)
-	if err != nil {
-		if errors.IsValidationError(err) {
-			klog.Warningf("%s is invalid, defaulting to false", proxyEnableRewriteAnnotation)
-		}
-	}
-
-	config.ProxyEnableRegex, err = parser.GetBoolAnnotations(proxyEnableRegex, ing)
+	config.ProxyEnableRegex, err = parser.GetBoolAnnotations(proxyEnableRegex, ing, proxyAnnotation.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to false", proxyEnableRegex)
 		}
 	}
 
-	if config.ProxyTarget != "" && !config.ProxyEnableRegex {
-		return config, fmt.Errorf("if annotations %s is not empty, annotations %s must be true", proxyTargetAnnotation, proxyEnableRegex)
+	//check
+	if config.ProxyTarget != "" && !parser.IsTargetPathRegex(config.ProxyTarget) {
+		klog.ErrorS(errors.NewValidationError(proxyTargetAnnotation),
+			proxyAnnotation.Annotations[proxyTargetAnnotation].Doc)
+		return config, errors.NewValidationError(proxyTargetAnnotation)
+	}
+
+	if parser.IsRegexPatternRegex(config.ProxyPath) && !config.ProxyEnableRegex && config.ProxyTarget == "" {
+		err = errors.NewValidationError(proxyPathAnnotation)
+		klog.ErrorS(err,
+			fmt.Sprintf("the value of annotations %s: %s looks like regexp. please add corresponding annotations such as: %s or %s",
+				proxyPathAnnotation, config.ProxyPath, proxyTargetAnnotation, proxyEnableRegex),
+		)
+		return config, err
+	}
+
+	if config.ProxyEnableRegex && !parser.IsRegexPatternRegex(config.ProxyPath) {
+		err = errors.NewValidationError(proxyPathAnnotation)
+		klog.ErrorS(err,
+			fmt.Sprintf("the %s value in annotations should be a valid regexp because %s is used in annotations", proxyPathAnnotation, proxyEnableRegex))
+		return config, err
+	}
+
+	if config.ProxyTarget != "" && !parser.IsRegexPatternRegex(config.ProxyPath) {
+		err = errors.NewValidationError(proxyPathAnnotation)
+		klog.ErrorS(err,
+			fmt.Sprintf("the %s value in annotations should be a valid regexp because %s is used in annotations", proxyPathAnnotation, proxyTargetAnnotation))
+		return config, err
 	}
 
 	if parser.PassIsIp(config.ProxyHost) && config.ProxySSL {
-		return config, fmt.Errorf("if %s is true, the %s not allow ip", proxySSLAnnotation, proxyHostAnnotation)
+		err = errors.NewValidationError(proxyHostAnnotation)
+		klog.ErrorS(err, proxyAnnotation.Annotations[proxyTargetAnnotation].Doc)
+		return config, err
 	}
+
+	config.ProxyTargetPath = config.ProxyPath
+	config.ProxyPath = p.formatProxyPath(config.ProxyPath, *config)
 
 	return config, nil
 }
 
 func (p *proxy) Validate(anns map[string]string) error {
 	return parser.CheckAnnotations(anns, proxyAnnotation.Annotations)
+}
+
+func (p *proxy) formatProxyPath(path string, proxyConfig Config) string {
+	if proxyConfig.ProxyTarget != "" || proxyConfig.ProxyEnableRegex {
+		path = "~ ^" + proxyConfig.ProxyPath
+	}
+
+	return path
 }

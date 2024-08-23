@@ -20,6 +20,7 @@ import (
 	"fmt"
 	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"regexp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -59,7 +60,7 @@ func (r *Ingress) ValidateCreate() (admission.Warnings, error) {
 	ingresslog.Info("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
-	return nil, r.ValidPath()
+	return nil, r.ValidData()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -67,7 +68,7 @@ func (r *Ingress) ValidateUpdate(old runtime.Object) (admission.Warnings, error)
 	ingresslog.Info("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
-	return nil, r.ValidPath()
+	return nil, r.ValidData()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -78,8 +79,34 @@ func (r *Ingress) ValidateDelete() (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (r *Ingress) ValidPath() error {
+func (r *Ingress) ValidData() error {
+	if err := r.ValidSpec(); err != nil {
+		return err
+	}
+
+	if err := r.ValidPathAndHost(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Ingress) ValidSpec() error {
+	if r.Spec.DefaultBackend == nil && len(r.Spec.Rules) == 0 {
+		return fmt.Errorf("no available backend found in ingress: %s, namespace: %s", r.Name, r.Namespace)
+	}
+
+	return nil
+}
+
+func (r *Ingress) ValidPathAndHost() error {
 	for _, v := range r.Spec.Rules {
+		proxyHost, ok := r.Annotations["ingress.nginx.kubebuilder.io/proxy-host"]
+		if ok {
+			if !r.ValidHost(v.Host) {
+				return fmt.Errorf("proxy-host: %s is an invalid value in ingress: %s, namespace: %s", proxyHost, r.Name, r.Namespace)
+			}
+		}
 		var path string
 		proxyPath, ok := r.Annotations["ingress.nginx.kubebuilder.io/proxy-path"]
 		if ok {
@@ -90,10 +117,23 @@ func (r *Ingress) ValidPath() error {
 		}
 		for _, p := range v.IngressRuleValue.HTTP.Paths {
 			if p.Path == path {
-				return fmt.Errorf("not allow duplicate path: %s, ingress: %s, namespace: %s", path, r.Name, r.Namespace)
+				return fmt.Errorf("not allow duplicate path: %s in ingress: %s, namespace: %s", path, r.Name, r.Namespace)
 			}
 			path = p.Path
 		}
 	}
 	return nil
+}
+
+func (r *Ingress) ValidHost(str string) bool {
+	validHost := func(str string) bool {
+		p := `([a0-z9]+\.)+([a-z]+)`
+		matched := regexp.MustCompile(p)
+		if !matched.MatchString(str) {
+			return false
+		}
+		return true
+	}
+
+	return validHost(str)
 }

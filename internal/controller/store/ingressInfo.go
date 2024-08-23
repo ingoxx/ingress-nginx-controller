@@ -19,8 +19,6 @@ type IngressInfo struct {
 	ctx     context.Context
 }
 
-// r client.Client, ingress *ingressv1.Ingress, ctx context.Context
-
 func NewIngressInfo(store Storer) *IngressInfo {
 	c := store.GetReconcilerInfo()
 	return &IngressInfo{

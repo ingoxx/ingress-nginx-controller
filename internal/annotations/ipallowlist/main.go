@@ -39,7 +39,7 @@ func NewParser(r resolver.Resolver) parser.IngressAnnotation {
 // Parse Only valid for the backend within the current ingress rule
 // e.g. 10.0.0.8/16,11.0.0.9/16
 func (p *ipallowList) Parse(ing *ingressv1.Ingress) (interface{}, error) {
-	val, err := parser.GetStringAnnotation(allowListAnnotation, ing)
+	val, err := parser.GetStringAnnotation(allowListAnnotation, ing, ipAllowListAnnotations.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
 			klog.Warningf("%s is invalid, defaulting to empty slice", allowListAnnotation)
