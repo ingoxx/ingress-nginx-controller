@@ -86,6 +86,7 @@ type SSLCert struct {
 
 type Backend struct {
 	Name           string                       `json:"name"`
+	IngName        string                       `json:"ing_name"`
 	NameSpace      string                       `json:"name_space"`
 	Path           string                       `json:"path"`
 	ServiceBackend *netv1.IngressServiceBackend `json:"service_backend"`

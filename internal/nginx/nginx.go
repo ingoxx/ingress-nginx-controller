@@ -54,8 +54,6 @@ func cleanConf(files ...string) {
 		if _, err := os.Stat(v); err == nil {
 			if err := os.Remove(v); err != nil {
 				klog.ErrorS(err, fmt.Sprintf("fail to clear %s", v))
-			} else {
-				klog.Info(fmt.Sprintf("clear %s successfully", v))
 			}
 		}
 	}
@@ -101,6 +99,16 @@ func reload(name string) error {
 	}
 
 	if err := generateConf(testConf, productConf); err != nil {
+		return err
+	}
+
+	if err := func() error {
+		defer cleanConf(testConf)
+		if err := generateConf(testConf, productConf); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
 		return err
 	}
 
@@ -161,7 +169,6 @@ func gracefulRestart() error {
 		klog.Fatalln("Fatal error nginx process does not exist")
 	}
 
-	klog.Info("reload nginx successfully")
 	return nil
 }
 
@@ -175,7 +182,7 @@ func Start() {
 		for {
 			select {
 			case <-stopSingle.C:
-				klog.Error("Timeout waiting for nginx to start")
+				klog.Error("timeout waiting for nginx to start")
 				return
 			case <-done:
 				WatchTlsFile()

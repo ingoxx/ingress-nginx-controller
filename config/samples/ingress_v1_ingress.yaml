@@ -5,16 +5,17 @@ metadata:
     ingress.nginx.kubebuilder.io/proxy-path: "/k8s(/|$)"
     ingress.nginx.kubebuilder.io/proxy-target: "/$1"
     ingress.nginx.kubebuilder.io/proxy-host: "ccc.com"
-    kubernetes:io/ingress.class: "kubebuilder-nginx"
-    #ingress.nginx.kubebuilder.io/proxy-enable-regex: "true"
-    #ingress.nginx.kubebuilder.io/ssl-stapling-verify: "false"
-    #ingress.nginx.kubebuilder.io/ssl-stapling: "false"
-    #ingress.nginx.kubebuilder.io/enable-regex: "true"
+    ingress.nginx.kubebuilder.io/denyList: "192.168.3.16"
+    kubernetes.io/ingress.class: "kubebuilder-nginx"
+#    ingress.nginx.kubebuilder.io/proxy-enable-regex: "true"
+#    ingress.nginx.kubebuilder.io/ssl-stapling-verify: "false"
+#    ingress.nginx.kubebuilder.io/ssl-stapling: "false"
+#    ingress.nginx.kubebuilder.io/enable-regex: "true"
     ingress.nginx.kubebuilder.io/rewrite-target: "/$2"
   labels:
     app.kubernetes.io/name: ingress-nginx-kubebuilder
     app.kubernetes.io/managed-by: kustomize
-  name: ingress-nginx
+  name: api
   namespace: ingress-nginx-kubebuilder-system
 spec:
   # TODO(user): Add fields here
@@ -22,7 +23,7 @@ spec:
     - host: "*.a.com"
       http:
         paths:
-          - path: "/aa/(p1|p1)(/|$)"
+          - path: "/aa/(p1|p2)(/|$)"
             pathType: ImplementationSpecific
             backend:
               service:
@@ -32,14 +33,14 @@ spec:
     - host: "b.com"
       http:
         paths:
-          - path: "/bb/(p1|p1)(/|$)"
+          - path: "/bb/(p1|p2)(/|$)"
             pathType: ImplementationSpecific
             backend:
               service:
                 name: nginx-service-b
                 port:
                   number: 9093
-          - path: "/cc/(p1|p1)(/|$)"
+          - path: "/cc/(p1|p2)(/|$)"
             pathType: ImplementationSpecific
             backend:
               service:

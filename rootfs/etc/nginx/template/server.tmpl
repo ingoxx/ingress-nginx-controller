@@ -1,7 +1,7 @@
 ## start {{ .Server.HostName }}
 {{ if gt (len .Server.Paths) 0 }}
 {{ range $backend := .Server.Paths }}
-upstream {{ $backend.Name }} {
+upstream {{ $backend.Name }}-{{ $backend.IngName }}-{{ $backend.NameSpace }} {
     server {{ $backend.Name }}.{{ $backend.NameSpace }}.svc:{{ $backend.Port }};
 }
 {{end}}
@@ -32,15 +32,19 @@ server {
     {{ end }}
     {{ end }}
 
+    ### ip allow list
     {{ if gt (len .Annotations.AllowList.CIDR) 0 }}
     {{ range $ip := .Annotations.AllowList.CIDR }}
-    allow {{ $ip }};{{ end }}
+    allow {{ $ip }};
+    {{ end }}
     deny all;
     {{ end }}
 
+    ### ip deny list
     {{ if gt (len .Annotations.DenyList.CIDR) 0 }}
     {{ range $ip := .Annotations.DenyList.CIDR }}
-    deny {{ $ip }};{{ end }}
+    deny {{ $ip }};
+    {{ end }}
     allow all;
     {{ end }}
 
@@ -53,11 +57,13 @@ server {
         return 204;
     }
 
-    #### proxy
+    #### proxy external cluster server
+    {{ if ne .Annotations.Proxy.ProxyPath "" }}
     location {{ .Annotations.Proxy.ProxyPath }} {
     	{{ if ne .Annotations.Proxy.ProxyTarget "" }}
     	rewrite ^{{ .Annotations.Proxy.ProxyTargetPath }} {{ .Annotations.Proxy.ProxyTarget }} break;
     	{{ end }}
+
     	set $best_http_host      $http_host;
         set $pass_server_port    $server_port;
         set $pass_port           $pass_server_port;
@@ -67,10 +73,8 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
-        proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        #proxy_set_header X-Real-IP              $remote_addr;
         proxy_set_header X-Forwarded-For        $remote_addr;
         proxy_set_header X-Forwarded-Host       $best_http_host;
         proxy_set_header X-Forwarded-Port       $pass_port;
@@ -109,6 +113,7 @@ server {
     	{{end}}
     	proxy_redirect                         off;
     }
+    {{ end }}
 
     #### backend
     {{ if gt (len .Server.Paths) 0 }}
@@ -117,6 +122,7 @@ server {
         {{ if ne .Annotations.Rewrite.RewriteTarget  "" }}
         rewrite ^{{ $backend.TargetPath }} {{ .Annotations.Rewrite.RewriteTarget }} break;
         {{ end }}
+
         set $best_http_host      $http_host;
         set $pass_server_port    $server_port;
         set $pass_port           $pass_server_port;
@@ -126,10 +132,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
-        proxy_set_header Host $host;
+
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        #proxy_set_header X-Real-IP              $remote_addr;
         proxy_set_header X-Forwarded-For        $remote_addr;
         proxy_set_header X-Forwarded-Host       $best_http_host;
         proxy_set_header X-Forwarded-Port       $pass_port;
@@ -161,7 +166,7 @@ server {
         proxy_next_upstream                     error timeout;
         proxy_next_upstream_timeout             0;
         proxy_next_upstream_tries               3;
-        proxy_pass http://{{ $backend.Name }};
+        proxy_pass http://{{ $backend.Name }}-{{ $backend.IngName }}-{{ $backend.NameSpace }};
         proxy_redirect                         off;
     }
     {{ end }}

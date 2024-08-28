@@ -186,6 +186,11 @@ func (n *NginxController) generateDefaultBackendTemplate(ingress annotations.Ing
 
 func (n *NginxController) generateConf(name string, b []byte) error {
 	testConf := filepath.Join(config.ConfDir, name+"-test.conf")
+
+	if err2 := os.WriteFile(filepath.Join("/etc/nginx", name+"-test.conf"), b, 0644); err2 != nil {
+		klog.ErrorS(err2, fmt.Sprintf("fail to create %s in /etc/nginx", name+"-test.conf"))
+	}
+
 	if err := os.WriteFile(testConf, b, 0644); err != nil {
 		klog.ErrorS(err, fmt.Sprintf("an error occurred while writing the generated content to %s", testConf))
 		return err
@@ -265,6 +270,7 @@ func (n *NginxController) getBackendConfigure(ingress annotations.IngressAnnotat
 			}
 
 			b := &ingressv1.Backend{
+				IngName:        n.ingress.Name,
 				Name:           svc.Name,
 				NameSpace:      svc.Namespace,
 				Path:           n.formatPath(p.Path, ingress),

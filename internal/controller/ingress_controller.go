@@ -74,9 +74,8 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	rs := r.GetReconcilerInfo()
-	rs.Context = ctx
-	rs.Ingress = ic
+	r.ctx = ctx
+	r.ingress = ic
 
 	if info := r.checkController(); info != nil {
 		klog.Infoln(info)
@@ -102,6 +101,7 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	rs := r.GetReconcilerInfo()
 	rs.DynamicClientSet = r.dynamicClient
 	rs.IngressInfos = store.NewIngressInfo(rs)
 
@@ -129,8 +129,10 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 func (r *IngressReconciler) GetReconcilerInfo() *store.IngressReconciler {
 	si := &store.IngressReconciler{
-		Client: r.Client,
-		Scheme: r.Scheme,
+		Client:  r.Client,
+		Scheme:  r.Scheme,
+		Ingress: r.ingress,
+		Context: r.ctx,
 	}
 
 	return si
@@ -171,23 +173,23 @@ func (r *IngressReconciler) createDynamicClientSet() *dynamic.DynamicClient {
 
 func (r *IngressReconciler) checkController() error {
 	ic := new(netv1.IngressClass)
-	rs := r.GetReconcilerInfo()
 
-	if rs.Ingress.Spec.IngressClassName == "" && rs.Ingress.Annotations["kubernetes.io/ingress.class"] == "" {
+	getAnnotations := r.ingress.GetAnnotations()
+	if r.ingress.Spec.IngressClassName == "" && getAnnotations[nginxAnnotationKey] == "" {
 		return fmt.Errorf("the current controller can be used by adding ingressClass or annotating specified values")
 	}
 
-	if rs.Ingress.Annotations["kubernetes.io/ingress.class"] == nginxAnnotation {
+	if r.ingress.Annotations[nginxAnnotationKey] == nginxAnnotationVal {
 		return nil
 	}
 
-	key := types.NamespacedName{Name: rs.Ingress.Spec.IngressClassName, Namespace: rs.Ingress.Namespace}
-	if err := r.Get(rs.Context, key, ic); err != nil {
+	key := types.NamespacedName{Name: r.ingress.Spec.IngressClassName, Namespace: r.ingress.Namespace}
+	if err := r.Get(r.ctx, key, ic); err != nil {
 		return err
 	}
 
 	if ic.Spec.Controller != controller {
-		return fmt.Errorf("neither ingressClass nor nginxAnnotation value matches the current controller")
+		return fmt.Errorf("neither ingressClass nor nginxAnnotationVal value matches the current controller")
 	}
 
 	return nil
