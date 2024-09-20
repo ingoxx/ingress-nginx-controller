@@ -11,8 +11,8 @@ server {
     server_name {{ .Server.HostName }};
     listen       80;
     listen  [::]:80;
-    listen       443 http2;
-    listen  [::]:443 http2;
+    listen       443 ssl;
+    listen  [::]:443 ssl;
 
     {{ if .Server.Tls.TlsNoPass }}
     ssl_certificate {{ .Server.Tls.TlsCrt }};

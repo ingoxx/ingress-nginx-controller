@@ -20,7 +20,7 @@ type IngressInfo struct {
 }
 
 func NewIngressInfo(store Storer) *IngressInfo {
-	c := store.GetReconcilerInfo()
+	c := store.ReconcilerInfo()
 	return &IngressInfo{
 		ingress: c.Ingress,
 		r:       c.Client,

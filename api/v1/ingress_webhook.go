@@ -27,6 +27,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+const (
+	proxyPathAnnotation = "ingress.nginx.kubebuilder.io/proxy-host"
+)
+
 // log is for logging in this package.
 var ingresslog = logf.Log.WithName("ingress-resource")
 
@@ -101,14 +105,14 @@ func (r *Ingress) ValidSpec() error {
 
 func (r *Ingress) ValidPathAndHost() error {
 	for _, v := range r.Spec.Rules {
-		proxyHost, ok := r.Annotations["ingress.nginx.kubebuilder.io/proxy-host"]
+		proxyHost, ok := r.Annotations[proxyPathAnnotation]
 		if ok {
 			if !r.ValidHost(v.Host) {
 				return fmt.Errorf("proxy-host: %s is an invalid value in ingress: %s, namespace: %s", proxyHost, r.Name, r.Namespace)
 			}
 		}
 		var path string
-		proxyPath, ok := r.Annotations["ingress.nginx.kubebuilder.io/proxy-path"]
+		proxyPath, ok := r.Annotations[proxyPathAnnotation]
 		if ok {
 			pp := v1.HTTPIngressPath{
 				Path: proxyPath,

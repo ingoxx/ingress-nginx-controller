@@ -13,7 +13,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sort"
 )
 
 type Resources struct {
@@ -26,7 +28,7 @@ type Resources struct {
 
 // ReconcileResource If the spec.tls field is not empty, the certificate and issuer resources here will not be created.
 func ReconcileResource(store store.Storer) error {
-	ctlInfo := store.GetReconcilerInfo()
+	ctlInfo := store.ReconcilerInfo()
 	r := NewResource(ctlInfo)
 
 	if len(r.ingress.Spec.Rules) == 0 {
@@ -107,8 +109,19 @@ func (t *Resources) reconcileCert(rr resolver.Resolver) error {
 		return err
 	}
 
-	if len(t.ingress.Spec.Rules) != len(domains) {
-		hosts := rr.GetHostName()
+	domainComparison := func(d1, d2 []string) bool {
+		sort.Strings(d1)
+		sort.Strings(d2)
+
+		if reflect.DeepEqual(d1, d2) {
+			return true
+		}
+
+		return false
+	}
+
+	hosts := rr.GetHostName()
+	if isEqual := domainComparison(hosts, domains); !isEqual {
 		if err := unstructured.SetNestedStringSlice(certificate.Object, hosts, "spec", "dnsNames"); err != nil {
 			return err
 		}

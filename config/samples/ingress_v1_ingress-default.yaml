@@ -1,0 +1,17 @@
+apiVersion: ingress.nginx.kubebuilder.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: "kubebuilder-nginx"
+  labels:
+    app.kubernetes.io/name: ingress-nginx-kubebuilder
+    app.kubernetes.io/managed-by: kustomize
+  name: www
+  namespace: web
+spec:
+  # TODO(user): Add fields here
+  defaultBackend:
+    service:
+      name: nginx-service-d
+      port:
+        number: 9092

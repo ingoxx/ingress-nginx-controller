@@ -1,8 +1,8 @@
 server {
     listen       80;
     listen  [::]:80;
-    listen       443 http2;
-    listen  [::]:443 http2;
+    listen       443 ssl;
+    listen  [::]:443 ssl;
     server_name  _;
 
     ssl_certificate /etc/nginx/ssl/default.pem;
@@ -27,10 +27,8 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
-        proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        #proxy_set_header X-Real-IP              $remote_addr;
         proxy_set_header X-Forwarded-For        $remote_addr;
         proxy_set_header X-Forwarded-Host       $best_http_host;
         proxy_set_header X-Forwarded-Port       $pass_port;
@@ -39,8 +37,6 @@ server {
         proxy_set_header X-Scheme               $pass_access_scheme;
         # Pass the original X-Forwarded-For
         proxy_set_header X-Original-Forwarded-For $http_x_forwarded_for;
-
-        # Custom headers to proxied server
 
         proxy_connect_timeout                   5s;
         proxy_send_timeout                      60s;
@@ -68,7 +64,7 @@ server {
     {{ end }}
     {{ else }}
     location / {
-        root   /usr/share/nginx/html;
+        # root   /usr/share/nginx/html;
         index  index.html index.htm;
     }
     {{ end }}

@@ -1,6 +1,7 @@
 package file
 
 import (
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/config"
 	"github.com/fsnotify/fsnotify"
 	"log"
 )
@@ -35,8 +36,12 @@ func (w *WatcherFile) watch() error {
 				if !ok {
 					return
 				}
-				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+				if w.dir == config.ConfDir && event.Has(fsnotify.Remove) {
 					w.onEvent()
+				} else if w.dir == config.SslPath {
+					if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+						w.onEvent()
+					}
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {

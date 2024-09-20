@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 	"sync"
 	"text/template"
 )
@@ -27,6 +28,7 @@ type configure struct {
 	ServerTpl   bytes.Buffer
 	Cfg         *ingressv1.Configuration
 	TmplName    string
+	MainTmpl    string
 	ConfName    string
 }
 
@@ -39,7 +41,7 @@ type NginxController struct {
 }
 
 func NewNginxController(store store.Storer) *NginxController {
-	st := store.GetReconcilerInfo()
+	st := store.ReconcilerInfo()
 	n := &NginxController{
 		client:  st.Client,
 		ctx:     st.Context,
@@ -47,6 +49,7 @@ func NewNginxController(store store.Storer) *NginxController {
 		ingress: st.Ingress,
 		mux:     new(sync.RWMutex),
 	}
+
 	return n
 }
 
@@ -59,7 +62,7 @@ func (n *NginxController) generateServerBytes(cfg *configure) error {
 
 	serverTemp, err := template.New("serverMain").Parse(string(serverStr))
 	if err != nil {
-		klog.ErrorS(err, fmt.Sprintf("error parsing template: %s", cfg.TmplName))
+		klog.ErrorS(err, fmt.Sprintf("error parsing template_nginx: %s", cfg.TmplName))
 		return err
 	}
 
@@ -70,17 +73,33 @@ func (n *NginxController) generateServerBytes(cfg *configure) error {
 	return nil
 }
 
-// Generate a .conf file named after host
+func (n *NginxController) generateConf(name string, b []byte) error {
+	testConf := name + "-test.conf"
+	if err := os.WriteFile(testConf, b, 0644); err != nil {
+		klog.ErrorS(err, fmt.Sprintf("an error occurred while writing the generated content to %s", testConf))
+		return err
+	}
+
+	stat, err := os.Stat(testConf)
+	if err != nil || stat.Size() == 0 {
+		klog.ErrorS(err, "fail to generate file")
+		return err
+	}
+
+	return nil
+}
+
+// Generate a.conf file named after host
 func (n *NginxController) generateConfigureBytes(cfg *configure) error {
-	mainTmplStr, err := os.ReadFile(config.NginxTmpl)
+	mainTmplStr, err := os.ReadFile(cfg.MainTmpl)
 	if err != nil {
-		klog.ErrorS(err, fmt.Sprintf("tmpelate file: %s not found", config.NginxTmpl))
+		klog.ErrorS(err, fmt.Sprintf("tmpelate file: %s not found", cfg.MainTmpl))
 		return err
 	}
 
 	mainTmpl, err := template.New("main").Parse(string(mainTmplStr))
 	if err != nil {
-		klog.ErrorS(err, fmt.Sprintf("error parsing template: %s", config.NginxTmpl))
+		klog.ErrorS(err, fmt.Sprintf("error parsing template_nginx: %s", cfg.MainTmpl))
 		return err
 	}
 
@@ -88,7 +107,7 @@ func (n *NginxController) generateConfigureBytes(cfg *configure) error {
 		for _, v := range cfg.Cfg.Servers {
 			cfg.Server = v
 			if err := n.generateServerBytes(cfg); err != nil {
-				klog.ErrorS(err, "fail to generate server template")
+				klog.ErrorS(err, "fail to generate server template_nginx")
 				return err
 			}
 
@@ -101,8 +120,7 @@ func (n *NginxController) generateConfigureBytes(cfg *configure) error {
 	}
 
 	var tpl bytes.Buffer
-	err = mainTmpl.Execute(&tpl, nil)
-	if err != nil {
+	if err = mainTmpl.Execute(&tpl, nil); err != nil {
 		return err
 	}
 
@@ -142,7 +160,8 @@ func (n *NginxController) generateBackendTemplate(ingress annotations.IngressAnn
 		Cfg:         serversCfg,
 		Annotations: ingress.ParsedAnnotations,
 		TmplName:    config.ServerTmpl,
-		ConfName:    n.ingress.Name + "-" + n.ingress.Namespace,
+		MainTmpl:    config.MainServerTmpl,
+		ConfName:    filepath.Join(config.ConfDir, n.ingress.Name+"-"+n.ingress.Namespace),
 	}
 
 	if err := n.generateConfigureBytes(cfg); err != nil {
@@ -164,41 +183,23 @@ func (n *NginxController) generateDefaultBackendTemplate(ingress annotations.Ing
 		return err
 	}
 
+	conf := strings.Split(config.MainConf, ".")
+
 	cfg := &configure{
 		Cfg:         defaultCfg,
 		Annotations: ingress.ParsedAnnotations,
 		TmplName:    config.DefaultTmpl,
-		ConfName:    "default",
+		MainTmpl:    config.NginxTmpl,
+		ConfName:    conf[0],
 	}
 
 	if err := n.generateConfigureBytes(cfg); err != nil {
 		return err
 	}
 
-	klog.Info("update default.conf successfully")
+	klog.Info(fmt.Sprintf("update %s successfully", filepath.Base(config.MainConf)))
 
 	if err := nginx.Reload(cfg.ConfName); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (n *NginxController) generateConf(name string, b []byte) error {
-	testConf := filepath.Join(config.ConfDir, name+"-test.conf")
-
-	if err2 := os.WriteFile(filepath.Join("/etc/nginx", name+"-test.conf"), b, 0644); err2 != nil {
-		klog.ErrorS(err2, fmt.Sprintf("fail to create %s in /etc/nginx", name+"-test.conf"))
-	}
-
-	if err := os.WriteFile(testConf, b, 0644); err != nil {
-		klog.ErrorS(err, fmt.Sprintf("an error occurred while writing the generated content to %s", testConf))
-		return err
-	}
-
-	stat, err := os.Stat(testConf)
-	if err != nil || stat.Size() == 0 {
-		klog.ErrorS(err, "fail to generate file")
 		return err
 	}
 

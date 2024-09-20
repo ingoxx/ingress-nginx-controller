@@ -1,0 +1,23 @@
+apiVersion: ingress.nginx.kubebuilder.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: "kubebuilder-nginx"
+  labels:
+    app.kubernetes.io/name: ingress-nginx-kubebuilder
+    app.kubernetes.io/managed-by: kustomize
+  name: api
+  namespace: web
+spec:
+  # TODO(user): Add fields here
+  rules:
+    - host: "*.k8s-web.com"
+      http:
+        paths:
+          - path: "/"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nginx-service-e
+                port:
+                  number: 9093

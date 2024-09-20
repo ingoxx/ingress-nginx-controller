@@ -9,7 +9,9 @@ import (
 )
 
 type Storer interface {
-	GetReconcilerInfo() *IngressReconciler
+	ReconcilerInfo() *IngressReconciler
+	Render(data interface{}) ([]byte, error)
+	Generate(name string, b []byte) error
 }
 
 type IngressReconciler struct {
@@ -21,6 +23,14 @@ type IngressReconciler struct {
 	DynamicClientSet *dynamic.DynamicClient
 }
 
-func (i *IngressReconciler) GetReconcilerInfo() *IngressReconciler {
+func (i *IngressReconciler) ReconcilerInfo() *IngressReconciler {
 	return i
+}
+
+func (i *IngressReconciler) Render(data interface{}) ([]byte, error) {
+	return nil, nil
+}
+
+func (i *IngressReconciler) Generate(name string, b []byte) error {
+	return nil
 }
