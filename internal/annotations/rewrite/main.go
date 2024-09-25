@@ -26,10 +26,10 @@ var rewriteAnnotation = parser.Annotation{
 	Group: "rewrite",
 	Annotations: parser.AnnotationFields{
 		rewriteTargetAnnotation: {
-			Doc: "It can contain regular characters and captured \n\t\t\tgroups specified as '$1', '$2', '/asd'.",
+			Doc: "It can contain regular characters and captured \n\t\t\tgroups specified as '$1', '$2', '/asd', optional",
 		},
 		rewriteEnableRegexAnnotation: {
-			Doc: "This annotation defines if the paths defined on an Ingress use regular expressions. To use regex on path\n\t\t\tthe pathType should also be defined as 'ImplementationSpecific'.",
+			Doc: "This annotation defines if the paths defined on an Ingress use regular expressions. To use regex on path\n\t\t\tthe pathType should also be defined as 'ImplementationSpecific', required",
 		},
 	},
 }

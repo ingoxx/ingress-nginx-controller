@@ -3,6 +3,7 @@ package annotations
 import (
 	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/allowcos"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/ipallowlist"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/ipdenylist"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
@@ -11,6 +12,7 @@ import (
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/rewrite"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/sslstapling"
+	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/weight"
 	kerr "github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
 	"github.com/imdario/mergo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +35,8 @@ type Ingress struct {
 	SSLStapling sslstapling.Config
 	AllowList   ipallowlist.SourceRange
 	DenyList    ipdenylist.SourceRange
+	AllowCos    allowcos.Config
+	Weight      weight.BackendWeight
 }
 
 func (*Ingress) GetIngressAnnotations() {}
@@ -40,12 +44,14 @@ func (*Ingress) GetIngressAnnotations() {}
 func NewAnnotationExtractor(r resolver.Resolver) *Extractor {
 	return &Extractor{
 		map[string]parser.IngressAnnotation{
-			"proxy":       proxy.NewParser(r),
+			"Proxy":       proxy.NewParser(r),
 			"Redirect":    redirect.NewParser(r),
 			"AllowList":   ipallowlist.NewParser(r),
 			"DenyList":    ipdenylist.NewParser(r),
 			"Rewrite":     rewrite.NewParser(r),
 			"SSLStapling": sslstapling.NewParser(r),
+			"AllowCos":    allowcos.NewParser(r),
+			"Weight":      weight.NewParser(r),
 		},
 	}
 }

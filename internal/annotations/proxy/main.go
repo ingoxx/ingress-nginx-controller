@@ -95,39 +95,8 @@ func (p *proxy) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	}
 
 	//check
-	if config.ProxyTarget != "" && !parser.IsTargetPathRegex(config.ProxyTarget) {
-		klog.ErrorS(errors.NewValidationError(proxyTargetAnnotation),
-			proxyAnnotation.Annotations[proxyTargetAnnotation].Doc)
-		return config, errors.NewValidationError(proxyTargetAnnotation)
-	}
-
-	if parser.IsRegexPatternRegex(config.ProxyPath) && !config.ProxyEnableRegex && config.ProxyTarget == "" {
-		err = errors.NewValidationError(proxyPathAnnotation)
-		klog.ErrorS(err,
-			fmt.Sprintf("the value of annotations %s: %s looks like regexp. please add corresponding annotations such as: %s or %s",
-				proxyPathAnnotation, config.ProxyPath, proxyTargetAnnotation, proxyEnableRegex),
-		)
-		return config, err
-	}
-
-	if config.ProxyEnableRegex && !parser.IsRegexPatternRegex(config.ProxyPath) {
-		err = errors.NewValidationError(proxyPathAnnotation)
-		klog.ErrorS(err,
-			fmt.Sprintf("the %s value in annotations should be a valid regexp because %s is used in annotations", proxyPathAnnotation, proxyEnableRegex))
-		return config, err
-	}
-
-	if config.ProxyTarget != "" && !parser.IsRegexPatternRegex(config.ProxyPath) {
-		err = errors.NewValidationError(proxyPathAnnotation)
-		klog.ErrorS(err,
-			fmt.Sprintf("the %s value in annotations should be a valid regexp because %s is used in annotations", proxyPathAnnotation, proxyTargetAnnotation))
-		return config, err
-	}
-
-	if parser.PassIsIp(config.ProxyHost) && config.ProxySSL {
-		err = errors.NewValidationError(proxyHostAnnotation)
-		klog.ErrorS(err, proxyAnnotation.Annotations[proxyTargetAnnotation].Doc)
-		return config, err
+	if err := p.check(config); err != nil {
+		return nil, err
 	}
 
 	config.ProxyTargetPath = config.ProxyPath
@@ -146,4 +115,44 @@ func (p *proxy) formatProxyPath(path string, proxyConfig Config) string {
 	}
 
 	return path
+}
+
+func (p *proxy) check(config *Config) error {
+	var err error
+	if config.ProxyTarget != "" && !parser.IsTargetPathRegex(config.ProxyTarget) {
+		klog.ErrorS(errors.NewValidationError(proxyTargetAnnotation),
+			proxyAnnotation.Annotations[proxyTargetAnnotation].Doc)
+		return errors.NewValidationError(proxyTargetAnnotation)
+	}
+
+	if parser.IsRegexPatternRegex(config.ProxyPath) && !config.ProxyEnableRegex && config.ProxyTarget == "" {
+		err = errors.NewValidationError(proxyPathAnnotation)
+		klog.ErrorS(err,
+			fmt.Sprintf("the value of annotations %s: %s looks like regexp. please add corresponding annotations such as: %s or %s",
+				proxyPathAnnotation, config.ProxyPath, proxyTargetAnnotation, proxyEnableRegex),
+		)
+		return err
+	}
+
+	if config.ProxyEnableRegex && !parser.IsRegexPatternRegex(config.ProxyPath) {
+		err = errors.NewValidationError(proxyPathAnnotation)
+		klog.ErrorS(err,
+			fmt.Sprintf("the %s value in annotations should be a valid regexp because %s is used in annotations", proxyPathAnnotation, proxyEnableRegex))
+		return err
+	}
+
+	if config.ProxyTarget != "" && !parser.IsRegexPatternRegex(config.ProxyPath) {
+		err = errors.NewValidationError(proxyPathAnnotation)
+		klog.ErrorS(err,
+			fmt.Sprintf("the %s value in annotations should be a valid regexp because %s is used in annotations", proxyPathAnnotation, proxyTargetAnnotation))
+		return err
+	}
+
+	if parser.PassIsIp(config.ProxyHost) && config.ProxySSL {
+		err = errors.NewValidationError(proxyHostAnnotation)
+		klog.ErrorS(err, proxyAnnotation.Annotations[proxyTargetAnnotation].Doc)
+		return err
+	}
+
+	return nil
 }

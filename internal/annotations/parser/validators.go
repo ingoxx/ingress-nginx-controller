@@ -45,8 +45,23 @@ func PassIsIp(target string) bool {
 	return re.MatchString(target)
 }
 
+func IsValidHost(host string) bool {
+	pattern := `([a0-z9]+\.)+([a-z]+)`
+	matched := regexp.MustCompile(pattern)
+	if !matched.MatchString(host) {
+		return false
+	}
+	return true
+}
+
 func IsAnnotationsPrefix(annotation string) bool {
 	pattern := `^` + AnnotationsPrefix + "/"
+	re := regexp.MustCompile(pattern)
+	return re.FindStringIndex(annotation) != nil
+}
+
+func IsWeightPrefix(annotation string) bool {
+	pattern := `^weight=[1-9](\d+)$`
 	re := regexp.MustCompile(pattern)
 	return re.FindStringIndex(annotation) != nil
 }

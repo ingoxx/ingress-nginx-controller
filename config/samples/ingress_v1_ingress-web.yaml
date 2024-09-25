@@ -3,6 +3,8 @@ kind: Ingress
 metadata:
   annotations:
     kubernetes.io/ingress.class: "kubebuilder-nginx"
+    ingress.nginx.kubebuilder.io/use-weight: "true"
+    ingress.nginx.kubebuilder.io/set-weight: "nginx-service-e:weight=80,nginx-service-d:weight=10"
   labels:
     app.kubernetes.io/name: ingress-nginx-kubebuilder
     app.kubernetes.io/managed-by: kustomize
@@ -21,3 +23,10 @@ spec:
                 name: nginx-service-e
                 port:
                   number: 9093
+          - path: "/"
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nginx-service-d
+                port:
+                  number: 9092

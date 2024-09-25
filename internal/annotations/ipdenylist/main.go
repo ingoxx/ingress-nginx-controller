@@ -27,7 +27,7 @@ var ipDenyListAnnotations = parser.Annotation{
 	Group: "ipdenylist",
 	Annotations: parser.AnnotationFields{
 		denyListAnnotation: {
-			Doc: "deny ip, eg: 2.2.2.2",
+			Doc: "deny ip, e.g: `2.2.2.2`, required",
 		},
 	},
 }

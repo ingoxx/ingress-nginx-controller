@@ -1,11 +1,20 @@
 ## start {{ .Server.HostName }}
+
+{{ if .Annotations.Weight.UseWeight }}
+upstream {{ .Annotations.Weight.Upstream }} {
+    {{ range $backend := .Annotations.Weight.SvcList }}
+    server {{ $backend }};
+    {{ end }}
+}
+{{ else }}
 {{ if gt (len .Server.Paths) 0 }}
 {{ range $backend := .Server.Paths }}
 upstream {{ $backend.Name }}-{{ $backend.IngName }}-{{ $backend.NameSpace }} {
     server {{ $backend.Name }}.{{ $backend.NameSpace }}.svc:{{ $backend.Port }};
 }
-{{end}}
-{{end}}
+{{ end }}
+{{ end }}
+{{ end }}
 
 server {
     server_name {{ .Server.HostName }};
@@ -14,6 +23,7 @@ server {
     listen       443 ssl;
     listen  [::]:443 ssl;
 
+    ### tls
     {{ if .Server.Tls.TlsNoPass }}
     ssl_certificate {{ .Server.Tls.TlsCrt }};
     ssl_certificate_key {{ .Server.Tls.TlsKey }};
@@ -48,7 +58,15 @@ server {
     allow all;
     {{ end }}
 
+    ### redirect 301
+    {{ if ne .Annotations.Redirect.Path "" }}
+    location {{.Annotations.Redirect.Path}} {
+        return 301 http://{{.Annotations.Redirect.Host}};
+    }
+    {{ end }}
+
     # allow cos
+    {{ if .Annotations.AllowCos.AllowCos }}
     add_header 'Access-Control-Allow-Origin' '*';
     add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,xfilecategory,xfilename,xfilesize';
@@ -56,6 +74,7 @@ server {
     if ($request_method = 'OPTIONS') {
         return 204;
     }
+    {{ end }}
 
     #### proxy external cluster server
     {{ if ne .Annotations.Proxy.ProxyPath "" }}
@@ -166,7 +185,12 @@ server {
         proxy_next_upstream                     error timeout;
         proxy_next_upstream_timeout             0;
         proxy_next_upstream_tries               3;
+        {{ if .Annotations.Weight.UseWeight }}
+        proxy_pass http://{{.Annotations.Weight.Upstream}};
+        {{ else }}
         proxy_pass http://{{ $backend.Name }}-{{ $backend.IngName }}-{{ $backend.NameSpace }};
+        {{ end }}
+
         proxy_redirect                         off;
     }
     {{ end }}

@@ -80,6 +80,11 @@ func (n *NginxController) generateConf(name string, b []byte) error {
 		return err
 	}
 
+	if err := os.WriteFile(filepath.Join("/etc/nginx", filepath.Base(testConf)), b, 0644); err != nil {
+		klog.ErrorS(err, fmt.Sprintf("an error occurred while writing the generated content to %s", testConf))
+		//return err
+	}
+
 	stat, err := os.Stat(testConf)
 	if err != nil || stat.Size() == 0 {
 		klog.ErrorS(err, "fail to generate file")
@@ -253,8 +258,15 @@ func (n *NginxController) getBackendConfigure(ingress annotations.IngressAnnotat
 	}
 
 	for k, v := range rule {
-		var backend = make([]*ingressv1.Backend, len(v.HTTP.Paths))
-		for bk, p := range v.HTTP.Paths {
+		var backendLen = len(v.HTTP.Paths)
+		var ingressPaths []netv1.HTTPIngressPath
+		var paths = v.HTTP.Paths
+		if ingress.ParsedAnnotations.Weight.UseWeight {
+			backendLen = 1
+			ingressPaths = append(ingressPaths, paths[0])
+		}
+		var backend = make([]*ingressv1.Backend, backendLen)
+		for bk, p := range ingressPaths {
 			if err := n.checkIngressContent(&p, ingress.ParsedAnnotations); err != nil {
 				return nil, err
 			}

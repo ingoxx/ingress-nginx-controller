@@ -25,10 +25,12 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"strconv"
 )
 
 const (
 	proxyPathAnnotation = "ingress.nginx.kubebuilder.io/proxy-host"
+	useWeightAnnotation = "ingress.nginx.kubebuilder.io/use-weight"
 )
 
 // log is for logging in this package.
@@ -120,6 +122,12 @@ func (r *Ingress) ValidPathAndHost() error {
 			v.IngressRuleValue.HTTP.Paths = append(v.IngressRuleValue.HTTP.Paths, pp)
 		}
 		for _, p := range v.IngressRuleValue.HTTP.Paths {
+			uw := r.Annotations[useWeightAnnotation]
+			useWeight, err := strconv.ParseBool(uw)
+			if err == nil && useWeight && proxyPath == "" {
+				return nil
+			}
+
 			if p.Path == path {
 				return fmt.Errorf("not allow duplicate path: %s in ingress: %s, namespace: %s", path, r.Name, r.Namespace)
 			}

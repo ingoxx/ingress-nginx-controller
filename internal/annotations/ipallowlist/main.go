@@ -27,7 +27,7 @@ var ipAllowListAnnotations = parser.Annotation{
 	Group: "ipallowlist",
 	Annotations: parser.AnnotationFields{
 		allowListAnnotation: {
-			Doc: "allow ip, eg: 1.1.1.1",
+			Doc: "allow ip, e.g: `allow 1.1.1.1` , required",
 		},
 	},
 }

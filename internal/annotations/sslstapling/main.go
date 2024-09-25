@@ -26,10 +26,10 @@ var sslAnnotations = parser.Annotation{
 	Group: "sslStapling",
 	Annotations: parser.AnnotationFields{
 		sslStaplingVerify: {
-			Doc: "switch ssl stapling verify",
+			Doc: "switch ssl stapling verify, optional",
 		},
 		sslStapling: {
-			Doc: "switch ssl stapling",
+			Doc: "switch ssl stapling, optional",
 		},
 	},
 }

@@ -64,18 +64,58 @@ func (t *IngressInfo) GetService(name string) (*corev1.Service, error) {
 	return svc, nil
 }
 
-func (t *IngressInfo) GetSvcPort(backend netv1.IngressBackend) int32 {
-	var port int32
-	svc, err := t.GetService(backend.Service.Name)
-	if err != nil {
-		return port
+func (t *IngressInfo) GetBackend(svc string) (netv1.IngressBackend, error) {
+	var backend netv1.IngressBackend
+	if len(t.ingress.Spec.Rules) > 0 {
+		for _, r := range t.ingress.Spec.Rules {
+			for _, b := range r.HTTP.Paths {
+				if b.Backend.Service.Name == svc {
+					backend = b.Backend
+					break
+				}
+			}
+		}
 	}
 
-	for _, svcPort := range svc.Spec.Ports {
-		if svcPort.Port == backend.Service.Port.Number || svcPort.Name == backend.Service.Port.Name {
-			port = backend.Service.Port.Number
-			break
+	return backend, nil
+}
+
+func (t *IngressInfo) GetSvcPort(data interface{}) int32 {
+	var port int32
+
+	switch data.(type) {
+	case netv1.IngressBackend:
+		backend := data.(netv1.IngressBackend)
+		svc, err := t.GetService(backend.Service.Name)
+		if err != nil {
+			return port
 		}
+
+		for _, svcPort := range svc.Spec.Ports {
+			if svcPort.Port == backend.Service.Port.Number || svcPort.Name == backend.Service.Port.Name {
+				port = backend.Service.Port.Number
+				break
+			}
+		}
+	case string:
+		svcName := data.(string)
+		backend, err := t.GetBackend(svcName)
+		if err != nil {
+			return port
+		}
+
+		svc, err := t.GetService(backend.Service.Name)
+		if err != nil {
+			return port
+		}
+
+		for _, svcPort := range svc.Spec.Ports {
+			if svcPort.Port == backend.Service.Port.Number || svcPort.Name == backend.Service.Port.Name {
+				port = backend.Service.Port.Number
+				break
+			}
+		}
+
 	}
 
 	return port
