@@ -61,7 +61,7 @@ func IsAnnotationsPrefix(annotation string) bool {
 }
 
 func IsWeightPrefix(annotation string) bool {
-	pattern := `^weight=[1-9](\d+)$`
+	pattern := `^weight=(0|[1-9]\d*)$`
 	re := regexp.MustCompile(pattern)
 	return re.FindStringIndex(annotation) != nil
 }

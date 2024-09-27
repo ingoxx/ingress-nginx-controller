@@ -1,7 +1,6 @@
 package ipdenylist
 
 import (
-	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
@@ -51,7 +50,7 @@ func (p *ipdenyList) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 			continue
 		}
 		if !parser.PassIsIp(alias) {
-			return nil, fmt.Errorf("the annotation %s does not contain a valid IP address", denyListAnnotation)
+			return nil, errors.NewInvalidAnnotationsContentError(denyListAnnotation, alias)
 		}
 
 		if !aliases.Has(alias) {

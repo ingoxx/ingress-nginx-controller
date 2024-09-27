@@ -97,7 +97,7 @@ func reload(name string) error {
 		if errors.As(err, &exitError) {
 			klog.ErrorS(err, fmt.Sprintf("nginx configuration: %s file verification fails, pls check", productConf))
 			if !isFirstReload {
-				if err := rolloutConf(productConf, backupFile); err != nil {
+				if err := rolloutConf(backupFile, productConf); err != nil {
 					return err
 				}
 			}
@@ -116,7 +116,7 @@ func reload(name string) error {
 	return nil
 }
 
-func reloadWatchFile() {
+func reloadIfWatchFileCurd() {
 	var exitError *exec.ExitError
 	cmd := exec.Command(config.Bin, "-t")
 	if err := cmd.Run(); err != nil {
@@ -182,20 +182,9 @@ func Start() {
 				klog.Error("timeout waiting for nginx to start")
 				return
 			case <-done:
-				WatchTlsFile()
+				dirWatcher()
 				return
 			default:
-				//processes, err := ps.Processes()
-				//if err != nil {
-				//	klog.ErrorS(err, "unexpected error obtaining process list")
-				//	return
-				//}
-				//for _, p := range processes {
-				//	if p.Executable() == "nginx" {
-				//		close(done)
-				//	}
-				//}
-
 				if isRunning() {
 					close(done)
 				}
@@ -211,13 +200,13 @@ func Start() {
 	}
 }
 
-func WatchTlsFile() {
-	klog.Info("start watch tls path")
-	if _, err := file.NewFileWatcher(config.SslPath, reloadWatchFile); err != nil {
-		klog.Fatal(fmt.Sprintf("fail to watch tls file, error %v", err))
+func dirWatcher() {
+	klog.Info("start watcher")
+	if _, err := file.NewFileWatcher(config.SslPath, reloadIfWatchFileCurd); err != nil {
+		klog.Fatal(fmt.Sprintf("fail to watch %s, error %v", config.SslPath, err))
 	}
 
-	if _, err := file.NewFileWatcher(config.ConfDir, reloadWatchFile); err != nil {
-		klog.Fatal(fmt.Sprintf("fail to watch nginx conf file, error %v", err))
+	if _, err := file.NewFileWatcher(config.ConfDir, reloadIfWatchFileCurd); err != nil {
+		klog.Fatal(fmt.Sprintf("fail to watch %s, error %v", config.ConfDir, err))
 	}
 }

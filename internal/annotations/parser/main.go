@@ -47,7 +47,7 @@ func (a ingAnnotations) parseString(name string) (string, error) {
 	val, ok := a[name]
 	if ok {
 		if val == "" {
-			return "", kerr.NewInvalidAnnotationContent(name, val)
+			return "", kerr.NewInvalidContent(name, val)
 		}
 
 		return val, nil
@@ -61,7 +61,7 @@ func (a ingAnnotations) parseStringSlice(name string) ([]string, error) {
 	val, ok := a[name]
 	if ok {
 		if val == "" {
-			return data, kerr.NewInvalidAnnotationContent(name, val)
+			return data, kerr.NewInvalidContent(name, val)
 		}
 
 		return data, nil
@@ -75,7 +75,7 @@ func (a ingAnnotations) parseBool(name string) (bool, error) {
 	if ok {
 		b, err := strconv.ParseBool(val)
 		if err != nil {
-			return false, kerr.NewInvalidAnnotationContent(name, val)
+			return false, kerr.NewInvalidContent(name, val)
 		}
 		return b, nil
 	}

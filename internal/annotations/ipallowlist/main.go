@@ -1,7 +1,6 @@
 package ipallowlist
 
 import (
-	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
@@ -53,7 +52,7 @@ func (p *ipallowList) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 			continue
 		}
 		if !parser.PassIsIp(alias) {
-			return nil, fmt.Errorf("the annotation %s does not contain a valid IP address", allowListAnnotation)
+			return nil, errors.NewInvalidAnnotationsContentError(allowListAnnotation, alias)
 		}
 
 		if !aliases.Has(alias) {

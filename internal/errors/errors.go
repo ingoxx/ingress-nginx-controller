@@ -56,7 +56,7 @@ func (e InvalidContentError) Error() string {
 	return e.Name
 }
 
-func NewInvalidAnnotationContent(name string, val interface{}) error {
+func NewInvalidContent(name string, val interface{}) error {
 	return InvalidContentError{
 		Name: fmt.Sprintf("the annotation %v does not contain a valid value (%v)", name, val),
 	}
@@ -80,4 +80,44 @@ func IsInvalidIngressContentError(e error) bool {
 	var invalidIngressContentError InvalidIngressContentError
 	ok := errors.As(e, &invalidIngressContentError)
 	return ok
+}
+
+type InvalidAnnotationContentError struct {
+	Name string
+}
+
+func (e InvalidAnnotationContentError) Error() string {
+	return e.Name
+}
+
+func IsInvalidAnnotationsContentError(e error) bool {
+	var invalidAnnotationsContentError InvalidAnnotationContentError
+	ok := errors.As(e, &invalidAnnotationsContentError)
+	return ok
+}
+
+func NewInvalidAnnotationsContentError(name string, val interface{}) error {
+	return InvalidAnnotationContentError{
+		Name: fmt.Sprintf("the annotation %v does not contain a valid value (%v)", name, val),
+	}
+}
+
+type MissResourcesError struct {
+	Name string
+}
+
+func (e MissResourcesError) Error() string {
+	return e.Name
+}
+
+func IsMissResourcesError(e error) bool {
+	var resourceNotFoundError MissResourcesError
+	ok := errors.As(e, &resourceNotFoundError)
+	return ok
+}
+
+func NewIsMissResourcesError(name string) error {
+	return MissResourcesError{
+		Name: fmt.Sprintf("service resouce %s not found.", name),
+	}
 }

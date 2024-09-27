@@ -260,10 +260,12 @@ func (n *NginxController) getBackendConfigure(ingress annotations.IngressAnnotat
 	for k, v := range rule {
 		var backendLen = len(v.HTTP.Paths)
 		var ingressPaths []netv1.HTTPIngressPath
-		var paths = v.HTTP.Paths
+
 		if ingress.ParsedAnnotations.Weight.UseWeight {
 			backendLen = 1
-			ingressPaths = append(ingressPaths, paths[0])
+			ingressPaths = append(ingressPaths, v.HTTP.Paths[0])
+		} else {
+			ingressPaths = v.HTTP.Paths
 		}
 		var backend = make([]*ingressv1.Backend, backendLen)
 		for bk, p := range ingressPaths {

@@ -1,6 +1,6 @@
 # Build the manager binary
 #FROM golang:1.21 AS builder
-FROM 19921006/go:v1.22 AS builder
+FROM gotec007/go:v1.22 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -40,7 +40,7 @@ RUN chown -R www-data:www-data /rootfs manager && \
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 # FROM gcr.io/distroless/static:nonroot
-FROM 19921006/operator:noroot4.9
+FROM gotec007/nginx:noroot5.3
 
 WORKDIR /
 

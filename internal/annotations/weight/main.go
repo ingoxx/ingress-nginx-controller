@@ -6,7 +6,6 @@ import (
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/errors"
-
 	"k8s.io/klog/v2"
 	"strings"
 )
@@ -28,15 +27,15 @@ var weightAnnotation = parser.Annotation{
 	},
 }
 
-type BackendWeight struct {
-	SvcList  []string `json:"svc-list"`
-	Upstream string   `json:"upstream"`
-	*Config
+type Translate struct {
+	Data string
 }
 
-type Config struct {
-	UseWeight bool   `json:"weight"`
-	SetWeight string `json:"set-weight"`
+type BackendWeight struct {
+	SvcList   []string `json:"svc-list"`
+	Upstream  string   `json:"upstream"`
+	UseWeight bool     `json:"weight"`
+	SetWeight string   `json:"set-weight"`
 }
 
 type weight struct {
@@ -51,9 +50,7 @@ func NewParser(r resolver.Resolver) parser.IngressAnnotation {
 
 func (r *weight) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	var err error
-	bw := &BackendWeight{
-		Config: &Config{},
-	}
+	bw := &BackendWeight{}
 	bw.UseWeight, err = parser.GetBoolAnnotations(useWeightAnnotation, ing, weightAnnotation.Annotations)
 	if err != nil {
 		if errors.IsValidationError(err) {
@@ -107,16 +104,20 @@ func (r *weight) check(ing *ingressv1.Ingress, config *BackendWeight) error {
 			val := strings.Split(alias, ":")
 			svc, err := r.r.GetService(val[0])
 			if err != nil {
-				return err
+				return errors.NewIsMissResourcesError(val[0])
 			}
 
 			svcPort := r.r.GetSvcPort(val[0])
 			if svcPort == 0 {
-				return fmt.Errorf("svc %s not found", val[0])
+				return errors.NewIsMissResourcesError(val[0])
 			}
 
 			if !parser.IsWeightPrefix(val[1]) {
-				return errors.NewInvalidAnnotationContent(setWeightAnnotation, config.SetWeight)
+				return errors.NewInvalidAnnotationsContentError(setWeightAnnotation, config.SetWeight)
+			}
+
+			if r.inspectWeightVal(val[1]).Data != "" {
+				val[1] = r.inspectWeightVal(val[1]).Data
 			}
 
 			if upstreamName == "" {
@@ -140,4 +141,14 @@ func (r *weight) check(ing *ingressv1.Ingress, config *BackendWeight) error {
 
 func (r *weight) Validate(anns map[string]string) error {
 	return parser.CheckAnnotations(anns, weightAnnotation.Annotations)
+}
+
+func (r *weight) inspectWeightVal(data string) Translate {
+	var t = Translate{}
+	val := strings.Split(data, "=")
+	if val[1] == "0" {
+		t.Data = "down"
+	}
+
+	return t
 }

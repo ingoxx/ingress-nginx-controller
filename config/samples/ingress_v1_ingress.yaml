@@ -2,15 +2,8 @@ apiVersion: ingress.nginx.kubebuilder.io/v1
 kind: Ingress
 metadata:
   annotations:
-    ingress.nginx.kubebuilder.io/proxy-path: "/"
-    ingress.nginx.kubebuilder.io/proxy-host: "tc.anythingai.online"
-    ingress.nginx.kubebuilder.io/proxy-sslstapling: "true"
     ingress.nginx.kubebuilder.io/denyList: "192.168.3.16"
     kubernetes.io/ingress.class: "kubebuilder-nginx"
-#    ingress.nginx.kubebuilder.io/proxy-enable-regex: "true"
-#    ingress.nginx.kubebuilder.io/ssl-stapling-verify: "false"
-#    ingress.nginx.kubebuilder.io/ssl-stapling: "false"
-#    ingress.nginx.kubebuilder.io/enable-regex: "true"
     ingress.nginx.kubebuilder.io/rewrite-target: "/$2"
   labels:
     app.kubernetes.io/name: ingress-nginx-kubebuilder

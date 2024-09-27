@@ -1,7 +1,6 @@
 package redirect
 
 import (
-	"fmt"
 	ingressv1 "github.com/Lxb921006/ingress-nginx-kubebuilder/api/v1"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/parser"
 	"github.com/Lxb921006/ingress-nginx-kubebuilder/internal/annotations/resolver"
@@ -57,7 +56,7 @@ func (r *redirect) Parse(ing *ingressv1.Ingress) (interface{}, error) {
 	}
 
 	if !r.check(config) {
-		return nil, fmt.Errorf("invaild val or miss val in redirect annotations")
+		return nil, errors.NewInvalidAnnotationsContentError(serverRedirectHostAnnotation, config.Host)
 	}
 
 	return config, nil

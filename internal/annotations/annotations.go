@@ -79,6 +79,16 @@ func (e Extractor) Extract(ing *ingressv1.Ingress) (*Ingress, error) {
 				return nil, err
 			}
 
+			if kerr.IsInvalidAnnotationsContentError(err) {
+				klog.ErrorS(err, fmt.Sprintf("annotation contains invalid value"))
+				return nil, err
+			}
+
+			if kerr.IsMissResourcesError(err) {
+				klog.ErrorS(err, "")
+				return nil, err
+			}
+
 			if kerr.IsMissingAnnotations(err) {
 				continue
 			}

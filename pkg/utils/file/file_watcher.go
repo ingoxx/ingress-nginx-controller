@@ -38,10 +38,8 @@ func (w *WatcherFile) watch() error {
 				}
 				if w.dir == config.ConfDir && event.Has(fsnotify.Remove) {
 					w.onEvent()
-				} else if w.dir == config.SslPath {
-					if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
-						w.onEvent()
-					}
+				} else if w.dir == config.SslPath && (event.Has(fsnotify.Write) || event.Has(fsnotify.Create)) {
+					w.onEvent()
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
