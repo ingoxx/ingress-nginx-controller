@@ -83,14 +83,17 @@ func (r *weight) check(ing *ingressv1.Ingress, config *BackendWeight) error {
 				}
 
 				if path != p.Path {
-					return fmt.Errorf("due to the use of traffic allocation, the path field value should be the same")
+					msg := fmt.Sprintf("when annotation %s is true, the path field of ingress must be the same, ingress name %s", useWeightAnnotation, ing.Name)
+					return errors.NewNotSatisfiableError(msg)
 				}
 			}
 		}
 
 		svcList := strings.Split(config.SetWeight, ",")
 		if len(svcList) < 1 {
-			return fmt.Errorf("at least two services are required to use the traffic allocation function")
+			msg := fmt.Sprintf("at least two services are required to use the traffic allocation function, ingress name %s", ing.Name)
+			return errors.NewNotSatisfiableError(msg)
+
 		}
 
 		var upstreamName string

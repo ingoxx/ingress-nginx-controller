@@ -89,6 +89,11 @@ func (e Extractor) Extract(ing *ingressv1.Ingress) (*Ingress, error) {
 				return nil, err
 			}
 
+			if kerr.IsNotSatisfiableError(err) {
+				klog.ErrorS(err, "")
+				return nil, err
+			}
+
 			if kerr.IsMissingAnnotations(err) {
 				continue
 			}

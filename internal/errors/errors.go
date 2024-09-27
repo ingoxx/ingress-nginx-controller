@@ -121,3 +121,23 @@ func NewIsMissResourcesError(name string) error {
 		Name: fmt.Sprintf("service resouce %s not found.", name),
 	}
 }
+
+type OtherNotSatisfiableError struct {
+	Msg string
+}
+
+func (e OtherNotSatisfiableError) Error() string {
+	return e.Msg
+}
+
+func IsNotSatisfiableError(e error) bool {
+	var resourceNotFoundError OtherNotSatisfiableError
+	ok := errors.As(e, &resourceNotFoundError)
+	return ok
+}
+
+func NewNotSatisfiableError(msg string) error {
+	return OtherNotSatisfiableError{
+		Msg: msg,
+	}
+}
