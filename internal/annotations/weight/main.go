@@ -19,7 +19,7 @@ var weightAnnotation = parser.Annotation{
 	Group: "allowCos",
 	Annotations: parser.AnnotationFields{
 		useWeightAnnotation: {
-			Doc: "use weight, e.g: `true or false`, required",
+			Doc: "use weight, e.g: ` true or false`, required",
 		},
 		setWeightAnnotation: {
 			Doc: "target backend, e.g: `svc-name1:weight=80,svc-name2:weight=20...`, required",
